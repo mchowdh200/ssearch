@@ -70,7 +70,7 @@ def rank_embeddings(sequences: list[str], query: str, max_length=1024):
     B = sequences
 
     distances = compare_embeddings(A, B, max_length)
-    sorted_indices = np.argsort(distances)
+    sorted_indices = np.argsort(distances).astype(int)
 
     ranked_distances = {}
     for i, idx in enumerate(sorted_indices):
