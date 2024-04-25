@@ -70,10 +70,14 @@ def rank_embeddings(sequences: list[str], query: str, max_length=1024):
     B = sequences
 
     distances = compare_embeddings(A, B, max_length)
-    ranked_distances = np.argsort(distances)
-    ranked_distances = np.array(ranked_distances)
-    distances = np.array(distances)
-    return ranked_distances, distances
+    sorted_indices = np.argsort(distances)
+
+    ranked_distances = {}
+    for i, idx in enumerate(sorted_indices):
+        ranked_distances[i] = (sequences[idx], distances[i][idx])
+    ranked_distances = dict(sorted(ranked_distances.items(), key=lambda x: x[1][1]))
+
+    return ranked_distances
 
 
 def rank_sequences(sequences: list[str], query: str, max_length=1024):
@@ -108,7 +112,8 @@ if __name__ == "__main__":
         # print(f"{ranking}: {distance[0]} - {distance[1]}")
         print(f"{ranking}: {distance[1]}")
 
-    ranked_distances, distances = rank_embeddings(sequences, query)
+    ranked_distances = rank_embeddings(sequences, query)
     print("Embedding distances:")
-    for rd, d in zip(ranked_distances, distances):
-        print(f"{rd}: {d}")
+    for ranking, distance in ranked_distances.items():
+        # print(f"{ranking}: {distance[0]} - {distance[1]}")
+        print(f"{ranking}: {distance[1]}")
