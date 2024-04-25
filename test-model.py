@@ -62,7 +62,7 @@ def compare_embeddings(A: list[str], B: list[str], max_length=1024) -> np.ndarra
     # aggregate output over the sequence dimension
     A_emb = torch.mean(model(A_tokenized).last_hidden_state, dim=1)
     B_emb = torch.mean(model(B_tokenized).last_hidden_state, dim=1)
-    return torch.cdist(A_emb, B_emb, p=2).cpu().detach().numpy()
+    return torch.nn.functional.pairwise_distance(A_emb, B_emb).cpu().detach().numpy()
 
 
 def rank_embeddings(sequences: list[str], query: str, max_length=1024):
