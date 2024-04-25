@@ -69,15 +69,16 @@ def rank_embeddings(sequences: list[str], query: str, max_length=1024):
     A = [query] * len(sequences)
     B = sequences
 
-    distances = compare_embeddings(A, B, max_length)
-    sorted_indices = np.argsort(distances).astype(int)
+    D = compare_embeddings(A, B, max_length)
 
-    ranked_distances = {}
-    for i, idx in enumerate(sorted_indices):
-        ranked_distances[i] = (sequences[idx], distances[i][idx])
-    ranked_distances = dict(sorted(ranked_distances.items(), key=lambda x: x[1][1]))
+    distances = {}
+    for i, seq in enumerate(sequences):
+        distances[i] = (seq, D[i])
 
+    ranked_distances = dict(sorted(distances.items(), key=lambda x: x[1][1]))
     return ranked_distances
+
+
 
 
 def rank_sequences(sequences: list[str], query: str, max_length=1024):
