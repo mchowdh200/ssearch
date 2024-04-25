@@ -31,6 +31,10 @@ def compare_embeddings(A: list[str], B: list[str], max_length=1024) -> np.ndarra
     A, B: batches of a, b sequence pairs
 
     """
+    print(type(A))
+    print(type(A[0]))
+    print(type(B))
+    print(type(B[0]))
 
     # truncate sequences to max_length
     for i in range(len(A)):
@@ -92,10 +96,10 @@ if __name__ == "__main__":
     # Then do pairwise disance comparison and ranking
     fasta = sys.argv[1]
     fasta = pyfastx.Fasta(fasta, build_index=True)
-    query = fasta[0]
+    query = fasta[0].seq
     sequences = []
     for i in range(10):
-        sequences.append(fasta[i + 1])
+        sequences.append(fasta[i + 1].seq)
 
     ranked_distances = rank_sequences(sequences, query)
     for ranking, distance in ranked_distances.items():
