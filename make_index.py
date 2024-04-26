@@ -1,10 +1,11 @@
 import argparse
 
+import tqdm
 import faiss
 import numpy as np
 import pyfastx
 import torch
-from functool import partial
+from functools import partial
 from torch.utils.data import DataLoader
 from transformers import AutoModel, AutoTokenizer
 
@@ -35,7 +36,7 @@ def main(checkpoint, index_path, dim, fastq, batch_size):
     ## build index ---------------------------------------------------------
     index = faiss.IndexFlatL2(dim)
     with torch.no_grad():
-        for batch in dataloader:
+        for batch in tqdm.tqdm(dataloader):
             embeddings = torch.mean(model(batch.to(device)).last_hidden_state, dim=1)
             index.add(embeddings.cpu().numpy())
 
@@ -75,3 +76,7 @@ def parse_args():
         help="batch size for indexing",
     )
     return parser.parse_args()
+
+if __name__ == "__main__":
+    args = parse_args()
+    main(**vars(args))
