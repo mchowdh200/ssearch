@@ -3,8 +3,9 @@ from torch.utils.data import Dataset
 import pyfastx
 
 class FastqDataset(Dataset):
-    def __init__(self, fastq_file):
-        self.fastq = pyfastx.Fastq(fastq_file)
+    def __init__(self, fastq):
+        # is this dum? yes
+        self.fastq = [x for x in pyfastx.Fastq(fastq)]
 
     def __len__(self):
         return len(self.fastq)
@@ -14,4 +15,4 @@ class FastqDataset(Dataset):
         return seq
 
 def tokenize_batch(sequences, tokenizer):
-    return torch.LongTensor(tokenizer(sequences)["input_ids"])
+    return torch.LongTensor(tokenizer(sequences["text"])["input_ids"])

@@ -6,8 +6,9 @@ import numpy as np
 import pyfastx
 import torch
 from functools import partial
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, TensorDataset
 from transformers import AutoModel, AutoTokenizer
+from datasets import Dataset
 
 from dataloaders import FastqDataset, tokenize_batch
 
@@ -26,11 +27,14 @@ def main(checkpoint, index_path, dim, fastq, batch_size):
     model, tokenizer = load_model(checkpoint)
     model.eval()
 
-    dataset = FastqDataset(fastq)
+    fastq = [x.seq for x in pyfastx.Fastq(fastq)]
+    dataset = Dataset.from_dict({"text": fastq})
+    dataset = dataset.map(lambda x: tokenizer(x['text']), batched=True)
     dataloader = DataLoader(
         dataset,
         batch_size=batch_size,
-        collate_fn=partial(tokenize_batch, tokenizer=tokenizer),
+        num_workers=8,
+        pin_memory=True,
     )
 
     ## build index ---------------------------------------------------------
