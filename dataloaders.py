@@ -2,17 +2,15 @@ import torch
 from torch.utils.data import Dataset
 import pyfastx
 
-class FastqDataset(Dataset):
-    def __init__(self, fastq):
-        # is this dum? yes
-        self.fastq = [x for x in pyfastx.Fastq(fastq)]
+class SequenceDataset(Dataset):
+    def __init__(self, sequences):
+        self.sequences = sequences
 
     def __len__(self):
-        return len(self.fastq)
+        return len(self.sequences)
 
     def __getitem__(self, idx):
-        seq = self.fastq[idx].seq
-        return seq
+        return self.sequences[idx]
 
-def tokenize_batch(sequences, tokenizer):
-    return torch.LongTensor(tokenizer(sequences["text"])["input_ids"])
+def tokenize_batch(batch: list[str], tokenizer):
+    return torch.LongTensor(tokenizer(batch)["input_ids"])
