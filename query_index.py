@@ -9,12 +9,13 @@ import torch
 from torch.utils.data import DataLoader
 
 from utils import SlidingWindowFasta, load_model
+from os.path import splitext, basename
 
 
 def query(index, model, seqs, topk, device):
     with torch.no_grad():
-        embeddings = model(seqs.to(device)).cpu().numpy()
-    return index.search(embeddings, topk)
+        embeddings = torch.mean(model(seqs.to(device)).last_hidden_state, dim=1)
+    return index.search(embeddings.cpu().numpy(), topk)
 
 
 def main(
@@ -38,7 +39,7 @@ def main(
             sliding_window_fasta = SlidingWindowFasta(
                 fasta, window_size=window_size, stride=stride
             )
-            sample_name = sliding_window_fasta.name
+            sample_name = splitext(basename(fasta))[0]
             dataloader = DataLoader(
                 sliding_window_fasta,
                 batch_size=batch_size,
@@ -46,7 +47,7 @@ def main(
             )
 
             for batch in dataloader:
-                seqs = batch["seqs"]
+                seqs = batch["seq"]
                 pos = batch["pos"]
                 # D: shape (batch_size, topk)
                 D, _ = query(index, model, seqs, topk, device)
@@ -107,6 +108,7 @@ def parse_args():
         required=True,
         help="Path to the output file",
     )
+    return parser.parse_args()
 
 if __name__ == "__main__":
     args = parse_args()
