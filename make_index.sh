@@ -11,5 +11,5 @@
 
 python make_index.py \
     --fastq /localscratch/BetaCoV_bat_Yunnan_RmYN02_2019_1.fq.gz \
-    --batch_size 10_000
+    --batch_size 4096
 

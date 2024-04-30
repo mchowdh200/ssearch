@@ -1,25 +1,13 @@
 import argparse
+from functools import partial
 
-import tqdm
 import faiss
-import numpy as np
 import pyfastx
 import torch
-from functools import partial
-from torch.utils.data import DataLoader, TensorDataset
-from transformers import AutoModel, AutoTokenizer
-from datasets import Dataset
-from pprint import pprint
+import tqdm
+from torch.utils.data import DataLoader
 
-from dataloaders import SequenceDataset, tokenize_batch
-
-
-def load_model(checkpoint: str):
-    model = AutoModel.from_pretrained(
-        checkpoint, device_map="auto", trust_remote_code=True
-    )
-    tokenizer = AutoTokenizer.from_pretrained(checkpoint, trust_remote_code=True)
-    return model, tokenizer
+from utils import SequenceDataset, load_model, tokenize_batch
 
 
 def main(checkpoint, index_path, dim, fastq, batch_size):
@@ -81,6 +69,7 @@ def parse_args():
         help="batch size for indexing",
     )
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     args = parse_args()
