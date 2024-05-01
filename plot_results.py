@@ -56,9 +56,11 @@ def make_plot(scores_bed: str):
     all_scores = load_scores(scores_bed)
     labels = []
 
+    average_scores = {}
     for sample in get_sample_names(scores_bed):
-        interval_bins = make_bins(0, 30_000, 50)
+        interval_bins = make_bins(-250, 29_001, 250)
         scores = all_scores[sample]
+        average_scores[sample] = np.mean([1-np.sqrt(i.data) / 2 for i in scores])
 
         for i in scores:
             ovlps = interval_bins.overlap(i)
@@ -69,11 +71,14 @@ def make_plot(scores_bed: str):
             [(i.begin, i.end, np.mean(i.data)) for i in interval_bins if i.data]
         )
 
-        labels.append(sample)
+        labels.append(f"{sample} (genome-wide average = {average_scores[sample]:.2f})")
         plt.plot(
             [x[0] for x in bins],
-            smooth_data([1 - np.sqrt(x[2]) / 2 for x in bins], window_size=20),
-            label=sample,
+            # smooth_data([x[2] for x in bins], window_size=50),
+            smooth_data([1 - np.sqrt(x[2]) / 2 for x in bins], window_size=10),
+            # [1 - np.sqrt(x[2]) / 2 for x in bins],
+            label=f"{sample} (genome-wide average = {average_scores[sample]:.2f})",
+            linewidth=0.75,
         )
 
     plt.ylim(.7, .85)

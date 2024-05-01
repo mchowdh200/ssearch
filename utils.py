@@ -1,10 +1,14 @@
+import pandas as pd
 import pyfastx
 import torch
 from torch.utils.data import Dataset
 from transformers import AutoModel, AutoTokenizer
 
 
-def load_model(checkpoint: str):
+## ------------------------------------------------------------------------------
+## Utility functions
+## ------------------------------------------------------------------------------
+def load_model(checkpoint: str) -> tuple[AutoModel, AutoTokenizer]:
     model = AutoModel.from_pretrained(
         checkpoint, device_map="auto", trust_remote_code=True
     )
@@ -12,6 +16,45 @@ def load_model(checkpoint: str):
     return model, tokenizer
 
 
+def tokenize_batch(batch: list[str], tokenizer) -> torch.Tensor:
+    return torch.LongTensor(tokenizer(batch)["input_ids"])
+
+
+## ------------------------------------------------------------------------------
+## Training datasets
+## ------------------------------------------------------------------------------
+class SiameseDataset(Dataset):
+    """
+    Load tab separated file with columns A, B, sim
+    where A, B are sequences and sim is a float similarity score.
+    """
+
+    def __init__(self, data: str, tokenizer: AutoTokenizer):
+        # We're assuming the data fits in memory.
+        # Otherwise we'd need to use some kind of
+        # lazy loading alternative to the dataframe.
+        self.data = pd.read_csv(data, sep="\t", names=["A", "B", "sim"])
+        self.tokenizer = tokenizer
+
+    def __len__(self):
+        return len(self.data)
+
+    def __getitem__(self, idx):
+        return self.data.iloc[idx]
+
+    def collate_fn(self, batch: list[dict]):
+        A, B, sim = zip(*[(x["A"], x["B"], x["sim"]) for x in batch])
+
+        return {
+            "A": tokenize_batch(A, self.tokenizer),
+            "B": tokenize_batch(B, self.tokenizer),
+            "sim": torch.FloatTensor(sim),
+        }
+
+
+## ------------------------------------------------------------------------------
+## Inference datasets
+## ------------------------------------------------------------------------------
 class SlidingWindowFasta(Dataset):
     """
     Given a fasta with a single sequence, generate sliding windows
@@ -70,7 +113,3 @@ class SequenceDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.sequences[idx]
-
-
-def tokenize_batch(batch: list[str], tokenizer):
-    return torch.LongTensor(tokenizer(batch)["input_ids"])
