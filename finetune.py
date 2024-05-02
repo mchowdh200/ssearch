@@ -1,35 +1,12 @@
 import argparse
 
 import lightning as L
-import torch
 from lightning.pytorch import callbacks
 from lightning.pytorch.loggers import WandbLogger
 from torch.utils.data import DataLoader
 
 from models import SiameseModule
 from utils import SiameseDataset, load_model
-
-# def train_dataloader(self):
-#     dataset = SiameseDataset(self.train_data, self.tokenizer)
-#     return DataLoader(
-#         dataset,
-#         batch_size=self.batch_size,
-#         shuffle=True,
-#         collate_fn=dataset.collate_fn,
-#         pin_memory=True,
-#         num_workers=self.num_workers,
-#     )
-
-# def val_dataloader(self):
-#     dataset = SiameseDataset(self.val_data, self.tokenizer)
-#     return DataLoader(
-#         dataset,
-#         batch_size=self.batch_size,
-#         collate_fn=dataset.collate_fn,
-#         num_workers=self.num_workers,
-#         pin_memory=True,
-#         shuffle=False,
-#     )
 
 
 def main(args):
@@ -162,6 +139,7 @@ def parse_args():
         help="Wandb project name.",
     )
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     args = parse_args()
