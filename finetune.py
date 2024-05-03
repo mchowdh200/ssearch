@@ -1,19 +1,24 @@
 import argparse
 
 import lightning as L
+import torch
 from lightning.pytorch import callbacks
 from lightning.pytorch.loggers import WandbLogger
 from torch.utils.data import DataLoader
+from transformers import AutoModel, AutoTokenizer
 
 from models import SiameseModule
 from utils import SiameseDataset, load_model
 
 
 def main(args):
-    model, tokenizer = load_model(args.pretrained_checkpoint)
-    model = SiameseModule(
-        model, learning_rate=args.learning_rate, weight_decay=args.weight_decay
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.pretrained_checkpoint, trust_remote_code=True
     )
+    model = SiameseModule(
+        args.pretrained_checkpoint, args.learning_rate, args.weight_decay
+    )
+    model.model.to(torch.device("cuda"))
 
     train_dataset = SiameseDataset(args.train_data, tokenizer)
     train_loader = DataLoader(
@@ -54,8 +59,9 @@ def main(args):
             patience=5,
             mode="min",
         ),
-        callbacks.RichProgressBar() if args.progress_bar else None,
     ]
+    if args.progress_bar:
+        trainer_callbacks.append(callbacks.RichProgressBar())
 
     trainer = L.Trainer(
         devices=args.devices,
@@ -71,7 +77,7 @@ def main(args):
 def parse_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--checkpoint-dir", type=str, default="checkpoints")
+    parser.add_argument("--checkpoint-dir", type=str, default="fine-tuning")
     parser.add_argument(
         "--pretrained-checkpoint",
         type=str,
@@ -137,6 +143,10 @@ def parse_args():
         type=str,
         default="seq-similarity",
         help="Wandb project name.",
+    )
+    parser.add_argument(
+        "--progress_bar",
+        action="store_true",
     )
     return parser.parse_args()
 
