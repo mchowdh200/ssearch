@@ -1,6 +1,11 @@
+import asyncio
+from typing import Literal
+
+import faiss
 import pandas as pd
 import pyfastx
 import torch
+from lightning.pytorch.callbacks import BasePredictionWriter
 from torch.utils.data import Dataset
 from transformers import AutoModel, AutoTokenizer
 
@@ -18,6 +23,31 @@ def load_model(checkpoint: str) -> tuple[AutoModel, AutoTokenizer]:
 
 def tokenize_batch(batch: list[str], tokenizer) -> torch.Tensor:
     return torch.LongTensor(tokenizer(batch)["input_ids"])
+
+
+## ------------------------------------------------------------------------------
+## Inference writer
+## ------------------------------------------------------------------------------
+class FaissIndexWriter(BasePredictionWriter):
+    def __init__(
+        self,
+        index_path: str,
+    ):
+        super().__init__(write_interval="batch")
+        self.index_path = index_path
+        self.index = faiss.IndexFlatL2()
+
+        # async writing to the index with multiple devices
+        self.lock = asyncio.Lock()
+
+    async def write_to_index(self, preds):
+        async with self.lock:
+            self.index.add(preds.cpu().numpy())
+
+    def write_on_batch_end(self, trainer, pl_module, predictions, batch_indices):
+        pass
+
+        
 
 
 ## ------------------------------------------------------------------------------
