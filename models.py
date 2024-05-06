@@ -42,7 +42,7 @@ class SiameseModule(L.LightningModule):
 
     def validation_step(self, batch, batch_idx):
         loss = self.siamese_step(batch)
-        self.log("val_loss", loss, on_epoch=True)
+        self.log("val_loss", loss, on_epoch=True, sync_dist=True)
         return loss
 
     def configure_optimizers(self):

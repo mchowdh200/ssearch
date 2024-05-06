@@ -53,10 +53,17 @@ def parse_args():
     )
     make_index_cmd.add_argument(
         "-b",
-        "--batch_size",
+        "--batch-size",
         type=int,
         default=4096,
         help="Batch size",
+    )
+    make_index_cmd.add_argument(
+        "-e",
+        "--embeddings-dim",
+        type=int,
+        default=256,
+        help="Dimension of the embedding vectors",
     )
     make_index_cmd.add_argument(
         "-d",
@@ -82,14 +89,14 @@ def make_index(args):
     tokenizer = AutoTokenizer.from_pretrained(
         args.tokenizer_checkpoint, trust_remote_code=True
     )
-    seqs = [x.seq for x in pyfastx.Fastx(args.fastq)]
+    seqs = [x.seq for x in pyfastx.Fastq(args.fastq)]
     dataset = SequenceDataset(seqs)
     dataloader = DataLoader(
         dataset,
         batch_size=args.batch_size,
         collate_fn=partial(tokenize_batch, tokenizer=tokenizer),
     )
-    index_writer = FaissIndexWriter(args.index_path)
+    index_writer = FaissIndexWriter(args.index_path, args.embeddings_dim)
     trainer = L.Trainer(
         devices=args.devices,
         strategy="auto",
@@ -102,6 +109,6 @@ def query_index(args):
     pass
 
 
-def main():
+if __name__ == "__main__":
     args = parse_args()
     args.func(args)

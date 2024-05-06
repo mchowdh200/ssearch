@@ -22,7 +22,7 @@ def load_model(checkpoint: str) -> tuple[AutoModel, AutoTokenizer]:
 
 
 def tokenize_batch(batch: list[str], tokenizer) -> torch.Tensor:
-    return torch.LongTensor(tokenizer(batch, padding='longest')["input_ids"])
+    return torch.LongTensor(tokenizer(batch, padding="longest")["input_ids"])
 
 
 ## ------------------------------------------------------------------------------
@@ -32,10 +32,11 @@ class FaissIndexWriter(BasePredictionWriter):
     def __init__(
         self,
         index_path: str,
+        dim: int,
     ):
         super().__init__(write_interval="batch")
         self.index_path = index_path
-        self.index = faiss.IndexFlatL2()
+        self.index = faiss.IndexFlatL2(dim)
 
         # async writing to the index with multiple devices
         self.lock = asyncio.Lock()
@@ -44,10 +45,18 @@ class FaissIndexWriter(BasePredictionWriter):
         async with self.lock:
             self.index.add(preds.cpu().numpy())
 
-    def write_on_batch_end(self, trainer, pl_module, predictions, batch_indices):
-        pass
-
-        
+    def write_on_batch_end(
+        self,
+        trainer,
+        pl_module,
+        prediction,
+        batch_indices,
+        batch,
+        batch_idx,
+        dataloader_idx,
+    ):
+        # write to the index
+        asyncio.run(self.write_to_index(prediction))
 
 
 ## ------------------------------------------------------------------------------
