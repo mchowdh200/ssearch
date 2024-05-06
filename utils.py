@@ -22,7 +22,7 @@ def load_model(checkpoint: str) -> tuple[AutoModel, AutoTokenizer]:
 
 
 def tokenize_batch(batch: list[str], tokenizer) -> torch.Tensor:
-    return torch.LongTensor(tokenizer(batch)["input_ids"])
+    return torch.LongTensor(tokenizer(batch, padding='longest')["input_ids"])
 
 
 ## ------------------------------------------------------------------------------
