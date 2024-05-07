@@ -58,6 +58,10 @@ class FaissIndexWriter(BasePredictionWriter):
         # write to the index
         asyncio.run(self.write_to_index(prediction))
 
+    def on_epoch_end(self, trainer, pl_module):
+        # save the index
+        faiss.write_index(self.index, self.index_path)
+
 
 ## ------------------------------------------------------------------------------
 ## Training datasets
