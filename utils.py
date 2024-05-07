@@ -1,7 +1,8 @@
 import asyncio
-from typing import Literal
+from os.path import basename, splitext
 
 import faiss
+import numpy as np
 import pandas as pd
 import pyfastx
 import torch
@@ -26,9 +27,13 @@ def tokenize_batch(batch: list[str], tokenizer) -> torch.Tensor:
 
 
 ## ------------------------------------------------------------------------------
-## Inference writer
+## Inference writers
 ## ------------------------------------------------------------------------------
 class FaissIndexWriter(BasePredictionWriter):
+    """
+    Given a output path, write the predictions to a faiss index.
+    """
+
     def __init__(
         self,
         index_path: str,
@@ -58,9 +63,57 @@ class FaissIndexWriter(BasePredictionWriter):
         # write to the index
         asyncio.run(self.write_to_index(prediction))
 
-    def on_epoch_end(self, trainer, pl_module):
+    def on_predict_epoch_end(self, trainer, pl_module):
         # save the index
         faiss.write_index(self.index, self.index_path)
+
+
+class FaissQueryWriter(BasePredictionWriter):
+    """
+    Use predictions as queries to search the faiss index.
+    """
+
+    def __init__(
+        self,
+        index_path: str,
+        topk: int,
+        output: str,
+    ):
+        super().__init__(write_interval="batch")
+        self.index = faiss.read_index(index_path)
+        self.topk = topk
+        self.output = output
+        self.lock = asyncio.Lock()
+
+    async def write_scores(self, samples, positions, D):
+        async with self.lock:
+            with open(self.output, "a") as f:
+                for s, p, d in zip(samples, positions, D):
+                    score = np.mean(d)
+                    f.write(f"{s}\t{p[0]}\t{p[1]}\t{score}\n")
+
+    def write_on_batch_end(
+        self,
+        trainer,
+        pl_module,
+        prediction,
+        batch_indices,
+        batch,
+        batch_idx,
+        dataloader_idx,
+    ):
+        """
+        - prediction: tensor containing batch of embedding vectors
+        - batch: dict of batch data with keys
+            - "sample": list of sample names
+            - "pos": list of start/end tuples
+            - "seq": tokenized sequences
+        """
+        samples = [s for s in batch["sample"]]
+        positions = [p for p in batch["pos"]]
+        D, _ = self.index.search(prediction.cpu().numpy(), self.topk)
+
+        asyncio.run(self.write_scores(samples, positions, D))
 
 
 ## ------------------------------------------------------------------------------
@@ -107,6 +160,7 @@ class SlidingWindowFasta(Dataset):
 
     def __init__(self, fasta_path, window_size, stride):
         fasta = pyfastx.Fasta(fasta_path)
+        self.sample_name = splitext(basename(fasta_path))[0]
         self.name = fasta[0].name.split()[0]
         self.sequence = fasta[0].seq
 
@@ -133,13 +187,18 @@ class SlidingWindowFasta(Dataset):
         return len(self.windowed_sequences)
 
     def __getitem__(self, idx):
-        return {"seq": self.windowed_sequences[idx], "pos": self.positions[idx]}
+        return {
+            "seq": self.windowed_sequences[idx],
+            "pos": self.positions[idx],
+            "sample": self.sample_name,
+        }
 
     @staticmethod
     def collate_fn(batch: list[dict], tokenizer):
         return {
             "seq": tokenize_batch([x["seq"] for x in batch], tokenizer),
             "pos": [x["pos"] for x in batch],
+            "sample": [x["sample"] for x in batch],
         }
 
 
