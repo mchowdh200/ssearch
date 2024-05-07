@@ -8,6 +8,7 @@ import numpy as np
 def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument("--scores_bed", help="BED file with scores")
+    parser.add_argument("--output", help="Output plot")
     return parser.parse_args()
 
 
@@ -52,7 +53,7 @@ def make_bins(start, end, step) -> intervaltree.IntervalTree:
     return interval_bins
 
 
-def make_plot(scores_bed: str):
+def make_plot(scores_bed: str, output: str):
     all_scores = load_scores(scores_bed)
     labels = []
 
@@ -81,13 +82,13 @@ def make_plot(scores_bed: str):
             linewidth=0.75,
         )
 
-    plt.ylim(.7, .85)
+    plt.ylim(.7, .85) # todo make into args
     plt.legend(labels)
     plt.xlabel("Genomic position")
-    plt.ylabel("Mean distance")
-    plt.show()
+    plt.ylabel("Similarity")
+    plt.savefig(output)
 
 
 if __name__ == "__main__":
     args = parse_args()
-    make_plot(args.scores_bed)
+    make_plot(args.scores_bed, args.output)

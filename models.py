@@ -18,7 +18,6 @@ class SiameseModule(L.LightningModule):
         self.checkpoint = checkpoint
         self.model = AutoModel.from_pretrained(
             checkpoint,
-            # device_map="auto",
             trust_remote_code=True,
         )
         self.learning_rate = learning_rate
@@ -26,7 +25,12 @@ class SiameseModule(L.LightningModule):
         self.save_hyperparameters()
 
     def forward(self, x):
-        return torch.mean(self.model(x).last_hidden_state, dim=1)
+        if type(x) == torch.Tensor:
+            return torch.mean(self.model(x).last_hidden_state, dim=1)
+        if type(x) == dict:
+            return torch.mean(self.model(x["seq"]).last_hidden_state, dim=1)
+        else:
+            raise ValueError("Input must be a tensor or a dictionary with key 'seq'")
 
     def siamese_step(self, batch: dict):
         A, B, sim = batch["A"], batch["B"], batch["sim"]

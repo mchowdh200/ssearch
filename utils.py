@@ -73,17 +73,30 @@ class FaissQueryWriter(BasePredictionWriter):
     Use predictions as queries to search the faiss index.
     """
 
+    # TODO make this class more general
+    # for example: what if we only provide the batch of sequences?
+    # Could possibly add some sort of batch schema to the writer
+
     def __init__(
         self,
         index_path: str,
         topk: int,
         output: str,
+        clear_existing: bool = False,
     ):
         super().__init__(write_interval="batch")
         self.index = faiss.read_index(index_path)
         self.topk = topk
         self.output = output
         self.lock = asyncio.Lock()
+
+        if clear_existing:
+            with open(self.output, "w") as f:
+                pass
+        else:
+            raise ValueError(
+                "Output file already exists.  Set clear_existing=True to overwrite."
+            )
 
     async def write_scores(self, samples, positions, D):
         async with self.lock:
