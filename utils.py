@@ -54,14 +54,19 @@ class FaissIndexWriter(BasePredictionWriter):
         dataloader_idx,
     ):
         # put all predictions across all devices into one process
-        gathered = [None] * dist.get_world_size()
-        dist.all_gather_object(gathered, prediction)
+
+        # gathered = [None] * dist.get_world_size()
+        gathered = torch.zeros(
+            (dist.get_world_size() * prediction.shape[0], *prediction.shape[1:]),
+            device=prediction.device,
+        )
+        dist.all_gather_into_tensor(gathered, prediction)
         dist.barrier()
 
         # only the global zero process writes to the index
         if not trainer.is_global_zero:
             return
-        self.index.add(torch.cat(gathered).cpu().numpy())
+        self.index.add(gathered.cpu().numpy())
 
     def on_predict_epoch_end(self, trainer, pl_module):
         dist.barrier()
@@ -131,7 +136,7 @@ class FaissQueryWriter(BasePredictionWriter):
         if not trainer.is_global_zero:
             return
 
-        with open(self.output, "a") as f
+        with open(self.output, "a") as f:
             for gp, gb in zip(gathered_preds, gathered_batches):
                 samples = [sample for sample in gb["sample"]]
                 positions = [pos for pos in gb["pos"]]
