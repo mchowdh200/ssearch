@@ -82,7 +82,7 @@ def make_plot(scores_bed: str, output: str):
             linewidth=0.75,
         )
 
-    plt.ylim(.7, .85) # todo make into args
+    plt.ylim(.8, 1.0) # todo make into args
     plt.legend(labels)
     plt.xlabel("Genomic position")
     plt.ylabel("Similarity")
