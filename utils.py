@@ -1,4 +1,3 @@
-import asyncio
 from os.path import basename, splitext
 
 import faiss
@@ -6,6 +5,7 @@ import numpy as np
 import pandas as pd
 import pyfastx
 import torch
+import torch.distributed as dist
 from lightning.pytorch.callbacks import BasePredictionWriter
 from torch.utils.data import Dataset
 from transformers import AutoModel, AutoTokenizer
@@ -43,13 +43,6 @@ class FaissIndexWriter(BasePredictionWriter):
         self.index_path = index_path
         self.index = faiss.IndexFlatL2(dim)
 
-        # async writing to the index with multiple devices
-        self.lock = asyncio.Lock()
-
-    async def write_to_index(self, preds):
-        async with self.lock:
-            self.index.add(preds.cpu().numpy())
-
     def write_on_batch_end(
         self,
         trainer,
@@ -60,11 +53,20 @@ class FaissIndexWriter(BasePredictionWriter):
         batch_idx,
         dataloader_idx,
     ):
-        # write to the index
-        asyncio.run(self.write_to_index(prediction))
+        # put all predictions across all devices into one process
+        gathered = [None] * dist.get_world_size()
+        dist.all_gather_object(gathered, prediction)
+        dist.barrier()
+
+        # only the global zero process writes to the index
+        if not trainer.is_global_zero:
+            return
+        self.index.add(torch.cat(gathered).cpu().numpy())
 
     def on_predict_epoch_end(self, trainer, pl_module):
-        # save the index
+        dist.barrier()
+        if not trainer.is_global_zero:
+            return
         faiss.write_index(self.index, self.index_path)
 
 
@@ -88,7 +90,6 @@ class FaissQueryWriter(BasePredictionWriter):
         self.index = faiss.read_index(index_path)
         self.topk = topk
         self.output = output
-        self.lock = asyncio.Lock()
 
         if clear_existing:
             with open(self.output, "w") as f:
@@ -98,12 +99,10 @@ class FaissQueryWriter(BasePredictionWriter):
                 "Output file already exists.  Set clear_existing=True to overwrite."
             )
 
-    async def write_scores(self, samples, positions, D):
-        async with self.lock:
-            with open(self.output, "a") as f:
-                for s, p, d in zip(samples, positions, D):
-                    score = np.mean(d)
-                    f.write(f"{s}\t{p[0]}\t{p[1]}\t{score}\n")
+    def write_scores(self, samples, positions, D, f):
+        for s, p, d in zip(samples, positions, D):
+            score = np.mean(d)
+            f.write(f"{s}\t{p[0]}\t{p[1]}\t{score}\n")
 
     def write_on_batch_end(
         self,
@@ -122,11 +121,22 @@ class FaissQueryWriter(BasePredictionWriter):
             - "pos": list of start/end tuples
             - "seq": tokenized sequences
         """
-        samples = [s for s in batch["sample"]]
-        positions = [p for p in batch["pos"]]
-        D, _ = self.index.search(prediction.cpu().numpy(), self.topk)
+        gathered_preds = [None] * dist.get_world_size()
+        dist.all_gather_object(gathered_preds, prediction)
 
-        asyncio.run(self.write_scores(samples, positions, D))
+        gathered_batches = [None] * dist.get_world_size()
+        dist.all_gather_object(gathered_batches, batch)
+
+        dist.barrier()
+        if not trainer.is_global_zero:
+            return
+
+        with open(self.output, "a") as f
+            for gp, gb in zip(gathered_preds, gathered_batches):
+                samples = [sample for sample in gb["sample"]]
+                positions = [pos for pos in gb["pos"]]
+                D, _ = self.index.search(gp.cpu().numpy(), self.topk)
+                self.write_scores(samples, positions, D, f)
 
 
 ## ------------------------------------------------------------------------------
