@@ -23,7 +23,7 @@ def load_model(checkpoint: str) -> tuple[AutoModel, AutoTokenizer]:
 
 
 def tokenize_batch(batch: list[str], tokenizer) -> torch.Tensor:
-    return torch.LongTensor(tokenizer(batch, padding="longest")["input_ids"])
+    return torch.LongTensor(tokenizer([s.upper() for s in batch], padding="longest")["input_ids"])
 
 
 ## ------------------------------------------------------------------------------
@@ -190,7 +190,7 @@ class SlidingWindowFasta(Dataset):
         fasta = pyfastx.Fasta(fasta_path)
         self.sample_name = splitext(basename(fasta_path))[0]
         self.name = fasta[0].name.split()[0]
-        self.sequence = fasta[0].seq
+        self.sequence = fasta[0].seq.upper()
 
         self.windowed_sequences, self.positions = self.sliding_window(
             self.sequence, window_size, stride

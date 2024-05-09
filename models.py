@@ -1,5 +1,6 @@
 import lightning as L
 import torch
+import torch.nn.functional as F
 from transformers import AutoModel
 
 
@@ -25,12 +26,11 @@ class SiameseModule(L.LightningModule):
         self.save_hyperparameters()
 
     def forward(self, x):
-        if type(x) == torch.Tensor:
-            return torch.mean(self.model(x).last_hidden_state, dim=1)
         if type(x) == dict:
-            return torch.mean(self.model(x["seq"]).last_hidden_state, dim=1)
-        else:
+            x = x["seq"]
+        elif type(x) != torch.Tensor:
             raise ValueError("Input must be a tensor or a dictionary with key 'seq'")
+        return F.normalize(torch.mean(self.model(x).last_hidden_state, dim=1))
 
     def siamese_step(self, batch: dict):
         A, B, sim = batch["A"], batch["B"], batch["sim"]

@@ -50,7 +50,7 @@ def main(args):
         callbacks.ModelCheckpoint(
             args.checkpoint_dir,
             monitor="val_loss",
-            filename="best",
+            filename="{epoch}-{val_loss:.4f}",
             save_top_k=5,
             mode="min",
         ),
