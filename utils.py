@@ -1,4 +1,6 @@
-from os.path import basename, splitext
+from dataclasses import dataclass
+from os.path import basename, dirname, exists, splitext
+from typing import Collection, Literal
 
 import faiss
 import numpy as np
@@ -9,6 +11,32 @@ import torch.distributed as dist
 from lightning.pytorch.callbacks import BasePredictionWriter
 from torch.utils.data import Dataset
 from transformers import AutoModel, AutoTokenizer
+
+
+## ------------------------------------------------------------------------------
+## Utility Classes and factories
+## ------------------------------------------------------------------------------
+@dataclass
+class BedRegion:
+    # genomic interval
+    chrom: str
+    start: int
+    end: int
+
+    # Used to associate faiss index vectors with the region
+    id: int
+
+    def __repr__(self):
+        return f"{self.chrom}\t{self.start}\t{self.end}\t{self.id}"
+
+
+def parse_bed(bedfile: str) -> list[BedRegion]:
+    regions = []
+    with open(bedfile, "r") as f:
+        for line in f:
+            chrom, start, end, id = line.rstrip().split()
+            regions.append(BedRegion(chrom, int(start), int(end), int(id)))
+    return regions
 
 
 ## ------------------------------------------------------------------------------
@@ -23,7 +51,9 @@ def load_model(checkpoint: str) -> tuple[AutoModel, AutoTokenizer]:
 
 
 def tokenize_batch(batch: list[str], tokenizer) -> torch.Tensor:
-    return torch.LongTensor(tokenizer([s.upper() for s in batch], padding="longest")["input_ids"])
+    return torch.LongTensor(
+        tokenizer([s.upper() for s in batch], padding="longest")["input_ids"]
+    )
 
 
 ## ------------------------------------------------------------------------------
@@ -179,6 +209,107 @@ class SiameseDataset(Dataset):
 ## ------------------------------------------------------------------------------
 ## Inference datasets
 ## ------------------------------------------------------------------------------
+
+
+class SlidingWindowReferenceFasta(Dataset):
+    """
+    Take a reference genome (fasta) and generate sliding windows of sequences.
+    """
+
+    def __init__(
+        self,
+        fasta_path: str,
+        window_size: int,
+        stride: int,
+        chromosome_names: Collection[str],
+        letter_case: Literal["upper", "lower"] = "upper",
+    ):
+        self.working_dir = dirname(fasta_path)
+        self.fasta_path = fasta_path
+        self.fasta_index = f"{fasta_path}.fai"
+        if not exists(fasta_index := f"{fasta_path}.fai"):
+            raise FileNotFoundError(f"Index file not found: {fasta_index}")
+
+        self.window_size = window_size
+        self.stride = stride
+        self.chromosome_names = set(chromosome_names)
+        self.bed_file = basename(fasta_path) + ".bed"
+
+        ## Make sliding window bed file to aid in retrieving windows of fasta sequence
+        # we will write this file to disk for later use,
+        # and load it into memory now for use in the dataset.
+        if not exists(self.bed_file):
+            self.chromosome_lengths = self._get_chromosome_lengths()
+            print(f"Making strided bed file for {fasta_path}.")
+            self._make_strided_bed(f"{self.working_dir}/{self.bed_file}")
+        self.bed_regions = parse_bed(self.bed_file)
+
+        ## Load the reference sequences into memory stored as a dict keyed by chromosome name
+        # additionally we map the sequences to the desired case.  This is important for
+        # different tokenizers. eg heynadna uses uppercase letters only
+        print(f"Loading reference sequences from {fasta_path}.")
+        if letter_case == "lower":
+            self.case_mapping = str.lower
+        elif letter_case == "upper":
+            case_mapping = str.upper
+        else:
+            raise ValueError(f"Invalid letter case: {letter_case}")
+
+        fasta = pyfastx.Fasta(fasta_path)
+        self.sequences = {
+            chrom: case_mapping(fasta[chrom].seq) for chrom in self.chromosome_names
+        }
+
+    def _get_chromosome_lengths(self) -> dict[str, int]:
+        """
+        Read fai to get the chromosome lengths.
+        """
+        with open(self.fasta_index, "r") as f:
+            return {
+                x[0]: int(line.split("\t")[1])
+                for line in f
+                if (x := line.split("\t"))[0] in self.chromosome_names
+            }
+
+    def _make_strided_bed(self, outfile: str):
+        """
+        Generate a bed file for a set of chromosomes with a sliding window.
+        Then Load the bed file into memory.
+        - outfile: path to write the bed intervals
+        - chroms: dict of chromosome lengths
+        - window_size: size of the window
+        - stride: stride of the sliding window
+        """
+        with open(outfile, "w") as f:
+            for chrom, length in self.chromosome_lengths.items():
+                # write bed intervals along with a unique int id
+                for i, start in enumerate(
+                    range(0, length - self.window_size + 1, self.stride)
+                ):
+                    end = start + self.window_size
+                    f.write(f"{chrom}\t{start}\t{end}\t{i}\n")
+
+    def __getitem__(self, idx: int):
+        r = self.bed_regions[idx]
+        return {
+            "seq": self.sequences[r.chrom][r.start : r.end + 1], # bed intervals are inclusive(?)
+            "chrom": r.chrom,
+            "start": r.start,
+            "end": r.end,
+            "id": r.id,
+        }
+    def __len__(self):
+        return len(self.bed_regions)
+    def collate_fn(self, batch: list[dict], tokenizer):
+        return {
+            "seq": tokenize_batch([x["seq"] for x in batch], tokenizer),
+            "chrom": [x["chrom"] for x in batch],
+            "start": [x["start"] for x in batch],
+            "end": [x["end"] for x in batch],
+            "id": [x["id"] for x in batch],
+        }
+
+
 class SlidingWindowFasta(Dataset):
     """
     Given a fasta with a single sequence, generate sliding windows
