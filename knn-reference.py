@@ -9,39 +9,12 @@ import lightning as L
 import torch
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
+from transformers.models.audio_spectrogram_transformer.feature_extraction_audio_spectrogram_transformer import \
+    window_function
 
 from models import SiameseModule
-from utils import FaissIndexWriter, FaissQueryWriter, tokenize_batch
-
-
-def get_chromosome_lengths(fasta_index: str, chromosome_names: set) -> dict[str, int]:
-    """
-    Read fai to get the chromosome lengths.
-    """
-    with open(fasta_index) as f:
-        return {
-            x[0]: int(line.split("\t")[1])
-            for line in f
-            if (x := line.split("\t"))[0] in chromosome_names
-        }
-
-
-def make_strided_bed(
-    outfile: str, chroms: dict[str, int], window_size: int, stride: int
-):
-    """
-    Generate a bed file for a set of chromosomes with a sliding window.
-    - outfile: path to write the bed intervals
-    - chroms: dict of chromosome lengths
-    - window_size: size of the window
-    - stride: stride of the sliding window
-    """
-    with open(outfile, "w") as f:
-        for chrom, length in chroms.items():
-            # write bed intervals along with a unique int id
-            for i, start in enumerate(range(0, length - window_size + 1, stride)):
-                end = start + window_size
-                f.write(f"{chrom}\t{start}\t{end}\t{i}\n")
+from utils import (FaissIndexWriter, FaissQueryWriter,
+                   SlidingWindowReferenceFasta, tokenize_batch)
 
 
 def build_reference_index(args):
@@ -49,7 +22,32 @@ def build_reference_index(args):
     tokenizer = AutoTokenizer.from_pretrained(
         args.tokenizer_checkpoint, trust_remote=True
     )
-    # TODO make a dataloader for the reference genome
+
+    dataset = SlidingWindowReferenceFasta(
+        fasta_path=args.fasta,
+        window_size=args.window_size,
+        stride=args.stride,
+        chromosome_names=args.chromosome_names,
+    )
+
+    dataloader = DataLoader(
+        dataset,
+        batch_size=args.batch_size,
+        num_workers=args.num_workers,
+        shuffle=False,
+        collate_fn=partial(SlidingWindowReferenceFasta.collate_fn, tokenizer=tokenizer),
+    )
+
+    index_writer = FaissIndexWriter(
+        index_path=dataset.fasta_path + ".faiss", dim=args.embeddings_dim, with_ids=True
+    )
+
+    trainer = L.Trainer(
+        devices=args.devices,
+        strategy="auto",
+        callbacks=[index_writer],
+    )
+    trainer.predict(model, dataloaders=[dataloader], return_predictions=False)
 
 
 def parse_args():
@@ -118,6 +116,11 @@ def parse_args():
         type=int,
         default=1,
         help="Number of gpus to use",
+    )
+    build_cmd.add_argument(
+        "--num-workers",
+        type=int,
+        help="Number of workers for the dataloader",
     )
     build_cmd.set_defaults(func=build_reference_index)
 

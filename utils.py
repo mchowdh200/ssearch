@@ -68,10 +68,15 @@ class FaissIndexWriter(BasePredictionWriter):
         self,
         index_path: str,
         dim: int,
+        with_ids: bool = False,
     ):
         super().__init__(write_interval="batch")
         self.index_path = index_path
         self.index = faiss.IndexFlatL2(dim)
+        self.with_ids = with_ids
+
+        if with_ids:
+            self.index = faiss.IndexIDMap(self.index)
 
     def write_on_batch_end(
         self,
@@ -83,20 +88,27 @@ class FaissIndexWriter(BasePredictionWriter):
         batch_idx,
         dataloader_idx,
     ):
-        # put all predictions across all devices into one process
-
-        # gathered = [None] * dist.get_world_size()
-        gathered = torch.zeros(
+        # put all predictions across all devices into one tensor
+        gathered_embeddings = torch.zeros(
             (dist.get_world_size() * prediction.shape[0], *prediction.shape[1:]),
             device=prediction.device,
         )
-        dist.all_gather_into_tensor(gathered, prediction)
-        dist.barrier()
+        dist.all_gather_into_tensor(gathered_embeddings, prediction)
+
+        if self.with_ids:
+            gatherered_ids = [None] * dist.get_world_size()
+            dist.all_gather_object(gatherered_ids, batch["id"])
+            gathered_ids = np.concatenate(gatherered_ids)
+
+        dist.barrier()  # synchronize
 
         # only the global zero process writes to the index
         if not trainer.is_global_zero:
             return
-        self.index.add(gathered.cpu().numpy())
+        if self.with_ids:
+            self.index.add_with_ids(gathered_embeddings.cpu().numpy(), gathered_ids)
+        else:
+            self.index.add(gathered_embeddings.cpu().numpy())
 
     def on_predict_epoch_end(self, trainer, pl_module):
         dist.barrier()
@@ -292,15 +304,18 @@ class SlidingWindowReferenceFasta(Dataset):
     def __getitem__(self, idx: int):
         r = self.bed_regions[idx]
         return {
-            "seq": self.sequences[r.chrom][r.start : r.end + 1], # bed intervals are inclusive(?)
+            "seq": self.sequences[r.chrom][r.start : r.end + 1],
             "chrom": r.chrom,
             "start": r.start,
             "end": r.end,
             "id": r.id,
         }
+
     def __len__(self):
         return len(self.bed_regions)
-    def collate_fn(self, batch: list[dict], tokenizer):
+
+    @staticmethod
+    def collate_fn(batch: list[dict], tokenizer):
         return {
             "seq": tokenize_batch([x["seq"] for x in batch], tokenizer),
             "chrom": [x["chrom"] for x in batch],
