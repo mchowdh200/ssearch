@@ -274,7 +274,7 @@ class SlidingWindowReferenceFasta(Dataset):
 
     def _get_chromosome_lengths(self) -> dict[str, int]:
         """
-        Read fai to get the chromosome lengths.
+        Read fai to get the chromosome lengths for the provided chromosomes names.
         """
         with open(self.fasta_index, "r") as f:
             return {

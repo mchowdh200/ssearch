@@ -16,8 +16,23 @@ from models import SiameseModule
 from utils import (FaissIndexWriter, FaissQueryWriter,
                    SlidingWindowReferenceFasta, tokenize_batch)
 
+def make_strided_bed(args):
+    """
+    Make a strided bed file from a reference fasta file for future dataloader use.
+    """
+    # init function makes a bed file from a reference
+    # fasta file and saves it to the fasta's directory.
+    dataset = SlidingWindowReferenceFasta(
+        fasta_path=args.fasta,
+        window_size=args.window_size,
+        stride=args.stride,
+        chromosome_names=args.chromosome_names,
+    )
 
 def build_reference_index(args):
+    """
+    Build a knn reference genome from a reference fasta file
+    """
     model = SiameseModule.load_from_checkpoint(args.checkpoint_path)
     tokenizer = AutoTokenizer.from_pretrained(
         args.tokenizer_checkpoint, trust_remote=True
@@ -53,15 +68,14 @@ def build_reference_index(args):
 def parse_args():
     parser = argparse.ArgumentParser(description=docstring)
     subparsers = parser.add_subparsers()
+
+    ## -----------------------------------------------------------------------
+    ## Build knn-reference genome
+    ## -----------------------------------------------------------------------
     build_cmd = subparsers.add_parser(
         "build", help="Build a knn reference genome from reference fasta"
     )
     build_cmd.add_argument("--fasta", help="Path to reference fasta file", type=str)
-    build_cmd.add_argument(
-        "--fasta-index",
-        help="Path to reference fasta index file",
-        type=str,
-    )
     build_cmd.add_argument(
         "--chromosome-names",
         type=str,
@@ -123,5 +137,37 @@ def parse_args():
         help="Number of workers for the dataloader",
     )
     build_cmd.set_defaults(func=build_reference_index)
+
+    ## -----------------------------------------------------------------------
+    ## Make strided bed file from reference
+    ## -----------------------------------------------------------------------
+    make_bed_cmd = subparsers.add_parser(
+        "make-bed", help="Make a bed file from a reference fasta"
+    )
+    make_bed_cmd.add_argument(
+        "--fasta",
+        help="Path to reference fasta file",
+        type=str,
+    )
+    make_bed_cmd.add_argument(
+        "--chromosome-names",
+        type=str,
+        nargs="+",
+        help="Chromosome names to include. Defaults to hg38 style names",
+        default=["chr" + str(i) for i in range(1, 23)] + ["chrX", "chrY", "chrM"],
+    )
+    make_bed_cmd.add_argument(
+        "--window-size",
+        type=int,
+        help="Size of the window to use for the reference genome",
+        default=150,
+    )
+    make_bed_cmd.add_argument(
+        "--stride",
+        type=int,
+        help="Stride of the sliding window",
+        default=50,
+    )
+    make_bed_cmd.set_defaults(func=make_strided_bed)
 
     return parser.parse_args()
