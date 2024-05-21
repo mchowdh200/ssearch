@@ -106,8 +106,15 @@ class FaissIndexWriter(BasePredictionWriter):
         if not trainer.is_global_zero:
             return
         if self.with_ids:
-            self.index.add_with_ids(gathered_embeddings.cpu().numpy(), gathered_ids)
+            # last batch padding issue with DDP
+            if len(gathered_ids) != gathered_embeddings.shape[0]:
+                self.index.add_with_ids(gathered_embeddings.cpu().numpy()[:len(gathered_ids)], gathered_ids)
+            else:
+                self.index.add_with_ids(gathered_embeddings.cpu().numpy(), gathered_ids)
         else:
+            # TODO its unclear wether DDP padding is an issue here
+            # It likely has a miniscule effect on the index.
+            # perhaps in the future I will only make indices `with_ids`
             self.index.add(gathered_embeddings.cpu().numpy())
 
     def on_predict_epoch_end(self, trainer, pl_module):
@@ -245,7 +252,7 @@ class SlidingWindowReferenceFasta(Dataset):
         self.window_size = window_size
         self.stride = stride
         self.chromosome_names = set(chromosome_names)
-        self.bed_file = basename(fasta_path) + ".bed"
+        self.bed_file = fasta_path + ".bed"
 
         ## Make sliding window bed file to aid in retrieving windows of fasta sequence
         # we will write this file to disk for later use,
@@ -253,7 +260,7 @@ class SlidingWindowReferenceFasta(Dataset):
         if not exists(self.bed_file):
             self.chromosome_lengths = self._get_chromosome_lengths()
             print(f"Making strided bed file for {fasta_path}.")
-            self._make_strided_bed(f"{self.working_dir}/{self.bed_file}")
+            self._make_strided_bed(f"{self.bed_file}")
         self.bed_regions = parse_bed(self.bed_file)
 
         ## Load the reference sequences into memory stored as a dict keyed by chromosome name

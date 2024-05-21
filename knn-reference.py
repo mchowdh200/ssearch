@@ -9,12 +9,11 @@ import lightning as L
 import torch
 from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
-from transformers.models.audio_spectrogram_transformer.feature_extraction_audio_spectrogram_transformer import \
-    window_function
 
 from models import SiameseModule
 from utils import (FaissIndexWriter, FaissQueryWriter,
                    SlidingWindowReferenceFasta, tokenize_batch)
+
 
 def make_strided_bed(args):
     """
@@ -29,13 +28,14 @@ def make_strided_bed(args):
         chromosome_names=args.chromosome_names,
     )
 
+
 def build_reference_index(args):
     """
     Build a knn reference genome from a reference fasta file
     """
     model = SiameseModule.load_from_checkpoint(args.checkpoint_path)
     tokenizer = AutoTokenizer.from_pretrained(
-        args.tokenizer_checkpoint, trust_remote=True
+        args.tokenizer_checkpoint, trust_remote_code=True
     )
 
     dataset = SlidingWindowReferenceFasta(
@@ -171,3 +171,7 @@ def parse_args():
     make_bed_cmd.set_defaults(func=make_strided_bed)
 
     return parser.parse_args()
+
+if __name__ == "__main__":
+    args = parse_args()
+    args.func(args)
