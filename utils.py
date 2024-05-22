@@ -9,7 +9,7 @@ import pyfastx
 import torch
 import torch.distributed as dist
 from lightning.pytorch.callbacks import BasePredictionWriter
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, get_worker_info
 from transformers import AutoModel, AutoTokenizer
 
 
@@ -52,6 +52,7 @@ def load_model(checkpoint: str) -> tuple[AutoModel, AutoTokenizer]:
 
 def tokenize_batch(batch: list[str], tokenizer) -> torch.Tensor:
     return torch.LongTensor(
+        # TODO give option for upper or lower case
         tokenizer([s.upper() for s in batch], padding="longest")["input_ids"]
     )
 
@@ -108,7 +109,9 @@ class FaissIndexWriter(BasePredictionWriter):
         if self.with_ids:
             # last batch padding issue with DDP
             if len(gathered_ids) != gathered_embeddings.shape[0]:
-                self.index.add_with_ids(gathered_embeddings.cpu().numpy()[:len(gathered_ids)], gathered_ids)
+                self.index.add_with_ids(
+                    gathered_embeddings.cpu().numpy()[: len(gathered_ids)], gathered_ids
+                )
             else:
                 self.index.add_with_ids(gathered_embeddings.cpu().numpy(), gathered_ids)
         else:
@@ -123,15 +126,56 @@ class FaissIndexWriter(BasePredictionWriter):
             return
         faiss.write_index(self.index, self.index_path)
 
+class KNNReferenceQueryWriter(BasePredictionWriter):
+    def __init__(self, index, id_bed, topk, output):
+        super().__init__(write_interval="batch")
+        self.index = faiss.read_index(index)
+        self.topk = topk
+
+        # we'll be writing in append mode so create/clear the file first
+        self.output = output
+        with open(self.output, "w") as f:
+                pass
+
+        # TODO check to make sure that the ids are in order
+        self.id_bed = id_bed
+        self.bed_regions = np.array(parse_bed(id_bed), dtype=object) 
+
+    def write_results(self, out, fname, names, regions, D):
+        """
+        Write a batch of results to the output file.
+        """
+	    for f, n, r, d in zip(fname, names, regions, D):
+	        out.write('\t'.join([f, n, f"{r.chrom}:{r.start}-{r.end},{d}"]))
+
+    def write_on_batch_end(
+        self,
+        trainer,
+        pl_module,
+        prediction,
+        batch_indices,
+        batch,
+        batch_idx,
+        dataloader_idx,
+    ):
+        # put all predictions across all devices into one tensor
+        gathered_embeddings = torch.zeros(
+            (dist.get_world_size() * prediction.shape[0], *prediction.shape[1:]),
+            device=prediction.device,
+        )
+        dist.all_gather_into_tensor(gathered_embeddings, prediction)
+        
+        # TODO gather batches but make it into a flat list?
+
+
 
 class FaissQueryWriter(BasePredictionWriter):
     """
     Use predictions as queries to search the faiss index.
     """
+    # TODO rename this to something more specific to the task
+    # or make it more general to handle any kind of query and output schema
 
-    # TODO make this class more general
-    # for example: what if we only provide the batch of sequences?
-    # Could possibly add some sort of batch schema to the writer
 
     def __init__(
         self,
@@ -194,8 +238,57 @@ class FaissQueryWriter(BasePredictionWriter):
 
 
 ## ------------------------------------------------------------------------------
-## Training datasets
+## Datasets
 ## ------------------------------------------------------------------------------
+class FastqDataset(Dataset):
+    """
+    Dataset for loading a fastq file using pyfastx and num_workers > 0.
+    You have to use the provided worker_init_fn to load the pyfastx object in each
+    worker during dataloader initialization.
+
+    example:
+    dataset = FastqDataset(filename, remake_index=True)
+    dataloader = DataLoader(
+        dataset,
+        num_workers=8,
+        batch_size=64,
+        worker_init_fn=FastqDataset.worker_init_fn,
+        collate_fn=functools.partial(dataset.collate_fn, tokenizer=tokenizer),
+    )
+    """
+
+    def __init__(self, filename, remake_index=False):
+        self.filename = filename
+        if not exists(filename + ".fxi") or remake_index:
+            self.make_index()
+
+    def make_index(self):
+        """build the index before initializing workers."""
+        pyfastx.Fastq(self.filename, build_index=True)
+
+    def __len__(self):
+        fastq = pyfastx.Fastq(self.filename)
+        return len(fastq)
+
+    def __getitem__(self, idx):
+        return self.fastq[idx]
+
+    def collate_fn(self, batch: list[pyfastx.Record], tokenizer):
+        return {
+            "filename": self.filename,
+            "seq": tokenize_batch([x.seq for x in batch], tokenizer),
+            "name": [x.name for x in batch],
+            "qual": [x.qual for x in batch],
+        }
+
+    @staticmethod
+    def worker_init_fn(worker_id):
+        worker_info = get_worker_info()
+        dataset = worker_info.dataset
+        fastq = pyfastx.Fastq(dataset.filename)
+        dataset.fastq = fastq
+
+
 class SiameseDataset(Dataset):
     """
     Load tab separated file with columns A, B, sim
@@ -223,11 +316,6 @@ class SiameseDataset(Dataset):
             "B": tokenize_batch(B, self.tokenizer),
             "sim": torch.FloatTensor(sim),
         }
-
-
-## ------------------------------------------------------------------------------
-## Inference datasets
-## ------------------------------------------------------------------------------
 
 
 class SlidingWindowReferenceFasta(Dataset):
