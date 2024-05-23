@@ -126,6 +126,7 @@ class FaissIndexWriter(BasePredictionWriter):
             return
         faiss.write_index(self.index, self.index_path)
 
+
 class KNNReferenceQueryWriter(BasePredictionWriter):
     def __init__(self, index, id_bed, topk, output):
         super().__init__(write_interval="batch")
@@ -135,19 +136,19 @@ class KNNReferenceQueryWriter(BasePredictionWriter):
         # we'll be writing in append mode so create/clear the file first
         self.output = output
         with open(self.output, "w") as f:
-                pass
+            pass
 
         # TODO check to make sure that the ids are in order
         self.id_bed = id_bed
-        self.bed_regions = np.array(parse_bed(id_bed), dtype=object) 
+        self.bed_regions = np.array(parse_bed(id_bed), dtype=object)
 
     def write_results(self, out, fnames, names, regions, D):
         """
         Write a batch of results to the output file.
         """
         # NOTE: we side step the ddp batch padding issue because of the zip
-	    for f, n, r, d in zip(fnames, names, regions, D):
-	        out.write('\t'.join([f, n, f"{r.chrom}:{r.start}-{r.end},{d}"]))
+        for f, n, r, d in zip(fnames, names, regions, D):
+            out.write("\t".join([f, n, f"{r.chrom}:{r.start}-{r.end},{d}"]))
 
     def write_on_batch_end(
         self,
@@ -165,11 +166,11 @@ class KNNReferenceQueryWriter(BasePredictionWriter):
             device=prediction.device,
         )
         dist.all_gather_into_tensor(gathered_embeddings, prediction)
-        
+
         gathered_batches = [None] * dist.get_world_size()
         dist.all_gather_object(gathered_batches, batch)
-        filenames = [f for fnames in gathered_batches['filename'] for f in fnames]
-        names = [n for names in gathered_batches['name'] for n in names]
+        filenames = [f for fnames in gathered_batches["filename"] for f in fnames]
+        names = [n for names in gathered_batches["name"] for n in names]
 
         dist.barrier()
         if not trainer.is_global_zero:
@@ -182,15 +183,13 @@ class KNNReferenceQueryWriter(BasePredictionWriter):
             self.write_results(out, filenames, names, regions, D)
 
 
-
-
 class FaissQueryWriter(BasePredictionWriter):
     """
     Use predictions as queries to search the faiss index.
     """
+
     # TODO rename this to something more specific to the task
     # or make it more general to handle any kind of query and output schema
-
 
     def __init__(
         self,
@@ -288,7 +287,7 @@ class FastqDataset(Dataset):
     def __getitem__(self, idx):
         return self.fastq[idx]
 
-    def collate_fn(self, batch: list[pyfastx.Record], tokenizer):
+    def collate_fn(self, batch, tokenizer):
         return {
             "filename": [self.filename for _ in batch],
             "seq": tokenize_batch([x.seq for x in batch], tokenizer),
