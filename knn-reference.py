@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
 from models import SiameseModule
-from utils import (FaissIndexWriter, FaissQueryWriter,
+from utils import (FaissIndexWriter, FastqDataset, KNNReferenceQueryWriter,
                    SlidingWindowReferenceFasta, tokenize_batch)
 
 
@@ -63,6 +63,43 @@ def build_reference_index(args):
         callbacks=[index_writer],
     )
     trainer.predict(model, dataloaders=[dataloader], return_predictions=False)
+
+
+def query_reference_index(args):
+    """
+    Query a knn reference genome and write the results to a file with format
+    filename    seq_name1    chrm:start-end,dist1    chrm:start-end,dist2    ...
+    filename    seq_name2    ...
+    """
+    model = SiameseModule.load_from_checkpoint(args.checkpoint_path)
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.tokenizer_checkpoint, trust_remote_code=True
+    )
+
+    datasets = [FastqDataset(filename=fq) for fq in args.query_fastqs]
+    dataloaders = [
+        DataLoader(
+            dset,
+            batch_size=args.batch_size,
+            num_workers=args.num_workers,
+            shuffle=False,
+            collate_fn=partial(dset.collate_fn, tokenizer=tokenizer),
+        )
+        for dset in datasets
+    ]
+
+    query_writer = KNNReferenceQueryWriter(
+        index=args.faiss_index,
+        id_bed=args.windowed_bed,
+        topk=args.topk,
+        output=args.output,
+    )
+    trainer = L.Trainer(
+        devices=args.devices,
+        strategy="auto",
+        callbacks=[query_writer],
+    )
+    trainer.predict(model, dataloaders=dataloaders, return_predictions=False)
 
 
 def parse_args():
@@ -170,7 +207,71 @@ def parse_args():
     )
     make_bed_cmd.set_defaults(func=make_strided_bed)
 
+    ## -----------------------------------------------------------------------
+    ## query knn-reference genome
+    ## -----------------------------------------------------------------------
+    query_cmd = subparsers.add_parser("query", help="Query a knn reference genome")
+    query_cmd.add_argument(
+        "--faiss-index",
+        help="Path to the faiss reference index file",
+        type=str,
+    )
+    query_cmd.add_argument(
+        "--windowed-bed",
+        help="Path to the windowed bed file",
+        type=str,
+    )
+    query_cmd.add_argument(
+        "--query-fastqs",
+        nargs="+",
+        help="Paths to the query fastq files",
+        type=str,
+    )
+    query_cmd.add_argument(
+        "--checkpoint-path",
+        type=str,
+        required=True,
+        help="Path to the (lightning) model checkpoint",
+    )
+    query_cmd.add_argument(
+        "--tokenizer-checkpoint",
+        type=str,
+        default="LongSafari/hyenadna-medium-160k-seqlen-hf",
+        help="Path to the huggingface tokenizer checkpoint",
+    )
+    query_cmd.add_argument(
+        "--batch-size",
+        type=int,
+        default=4096,
+        help="Batch size for dataloader",
+    )
+    query_cmd.add_argument(
+        "--devices",
+        type=int,
+        required=True,
+        help="Number of gpus to use",
+    )
+    query_cmd.add_argument(
+        "--num-workers",
+        type=int,
+        required=True,
+        help="Number of workers for the dataloader",
+    )
+    query_cmd.add_argument(
+        "--topk",
+        type=int,
+        required=True,
+        help="Number of top hits to return",
+    )
+    query_cmd.add_argument(
+        "--output",
+        type=str,
+        required=True,
+        help="Path to write the output file",
+    )
+    query_cmd.set_defaults(func=query_reference_index)
     return parser.parse_args()
+
 
 if __name__ == "__main__":
     args = parse_args()

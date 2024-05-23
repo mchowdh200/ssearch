@@ -141,11 +141,12 @@ class KNNReferenceQueryWriter(BasePredictionWriter):
         self.id_bed = id_bed
         self.bed_regions = np.array(parse_bed(id_bed), dtype=object) 
 
-    def write_results(self, out, fname, names, regions, D):
+    def write_results(self, out, fnames, names, regions, D):
         """
         Write a batch of results to the output file.
         """
-	    for f, n, r, d in zip(fname, names, regions, D):
+        # NOTE: we side step the ddp batch padding issue because of the zip
+	    for f, n, r, d in zip(fnames, names, regions, D):
 	        out.write('\t'.join([f, n, f"{r.chrom}:{r.start}-{r.end},{d}"]))
 
     def write_on_batch_end(
@@ -158,14 +159,28 @@ class KNNReferenceQueryWriter(BasePredictionWriter):
         batch_idx,
         dataloader_idx,
     ):
-        # put all predictions across all devices into one tensor
+        ## combine results/batches ---------------------------------------------
         gathered_embeddings = torch.zeros(
             (dist.get_world_size() * prediction.shape[0], *prediction.shape[1:]),
             device=prediction.device,
         )
         dist.all_gather_into_tensor(gathered_embeddings, prediction)
         
-        # TODO gather batches but make it into a flat list?
+        gathered_batches = [None] * dist.get_world_size()
+        dist.all_gather_object(gathered_batches, batch)
+        filenames = [f for fnames in gathered_batches['filename'] for f in fnames]
+        names = [n for names in gathered_batches['name'] for n in names]
+
+        dist.barrier()
+        if not trainer.is_global_zero:
+            return
+
+        ## search and write results --------------------------------------------
+        D, I = self.index.search(gathered_embeddings.cpu().numpy(), self.topk)
+        regions = self.bed_regions[I]
+        with open(self.output, "a") as out:
+            self.write_results(out, filenames, names, regions, D)
+
 
 
 
@@ -275,7 +290,7 @@ class FastqDataset(Dataset):
 
     def collate_fn(self, batch: list[pyfastx.Record], tokenizer):
         return {
-            "filename": self.filename,
+            "filename": [self.filename for _ in batch],
             "seq": tokenize_batch([x.seq for x in batch], tokenizer),
             "name": [x.name for x in batch],
             "qual": [x.qual for x in batch],
