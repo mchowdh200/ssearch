@@ -130,7 +130,7 @@ class FaissIndexWriter(BasePredictionWriter):
 class KNNReferenceQueryWriter(BasePredictionWriter):
     def __init__(self, index, id_bed, topk, output):
         super().__init__(write_interval="batch")
-        # self.index = faiss.read_index(index)
+        self.index_path = index
         self.topk = topk
 
         # we'll be writing in append mode so create/clear the file first
@@ -146,7 +146,7 @@ class KNNReferenceQueryWriter(BasePredictionWriter):
         if not trainer.is_global_zero:
             return
         # don't load the index needlessly
-        self.index = faiss.read_index(self.index)
+        self.index = faiss.read_index(self.index_path)
 
     def write_results(self, out, fnames, names, regions, D):
         """
