@@ -1,15 +1,17 @@
+import functools
 from dataclasses import dataclass
 from os.path import basename, dirname, exists, splitext
-from typing import Collection, Literal
+from typing import Collection, Iterable, Literal
 
 import faiss
+import lightning as L
 import numpy as np
 import pandas as pd
 import pyfastx
 import torch
 import torch.distributed as dist
 from lightning.pytorch.callbacks import BasePredictionWriter
-from torch.utils.data import Dataset, get_worker_info
+from torch.utils.data import DataLoader, Dataset, get_worker_info
 from transformers import AutoModel, AutoTokenizer
 
 
@@ -128,8 +130,9 @@ class FaissIndexWriter(BasePredictionWriter):
 
 
 class KNNReferenceQueryWriter(BasePredictionWriter):
-    def __init__(self, index, id_bed, topk, output):
+    def __init__(self, index, id_bed, topk, output, devices=1):
         super().__init__(write_interval="batch")
+        self.devices = devices
         self.index_path = index
         self.topk = topk
 
@@ -143,7 +146,7 @@ class KNNReferenceQueryWriter(BasePredictionWriter):
         self.bed_regions = np.array(parse_bed(id_bed), dtype=object)
 
     def setup(self, trainer, pl_module, stage):
-        if not trainer.is_global_zero:
+        if not trainer.is_global_zero and self.devices > 1:
             return
         # don't load the index needlessly
         self.index = faiss.read_index(self.index_path)
@@ -153,8 +156,10 @@ class KNNReferenceQueryWriter(BasePredictionWriter):
         Write a batch of results to the output file.
         """
         # NOTE: we side step the ddp batch padding issue because of the zip
-        for f, n, r, d in zip(fnames, names, regions, D):
-            out.write("\t".join([f, n, f"{r.chrom}:{r.start}-{r.end},{d}"]))
+        for f, n, reg, dist in zip(fnames, names, regions, D):
+            out.write(f"{f}\t{n}\t")
+            out.write("\t".join(f"{r.chrom}:{r.start}-{r.end},{d}" for r, d in zip(reg, dist)))
+            out.write("\n")
 
     def write_on_batch_end(
         self,
@@ -166,24 +171,30 @@ class KNNReferenceQueryWriter(BasePredictionWriter):
         batch_idx,
         dataloader_idx,
     ):
-        ## combine results/batches ---------------------------------------------
-        gathered_embeddings = torch.zeros(
-            (dist.get_world_size() * prediction.shape[0], *prediction.shape[1:]),
-            device=prediction.device,
-        )
-        dist.all_gather_into_tensor(gathered_embeddings, prediction)
+        if self.devices > 1:
+            ## combine results/batches ---------------------------------------------
+            gathered_embeddings = torch.zeros(
+                (dist.get_world_size() * prediction.shape[0], *prediction.shape[1:]),
+                device=prediction.device,
+            )
+            dist.all_gather_into_tensor(gathered_embeddings, prediction)
 
-        gathered_batches = [None] * dist.get_world_size()
-        dist.all_gather_object(gathered_batches, batch)
-        filenames = [f for fnames in gathered_batches["filename"] for f in fnames]
-        names = [n for names in gathered_batches["name"] for n in names]
+            gathered_batches = [None] * dist.get_world_size()
+            dist.all_gather_object(gathered_batches, batch)
+            filenames = [f for batch in gathered_batches for f in batch["filename"]]
+            names = [n for batch in gathered_batches for n in batch["name"]]
 
-        dist.barrier()
-        if not trainer.is_global_zero:
-            return
+            dist.barrier()
+            if not trainer.is_global_zero:
+                return
+        else:
+            gathered_embeddings = prediction
+            filenames = batch["filename"]
+            names = batch["name"]
+
 
         ## search and write results --------------------------------------------
-        D, I = self.index.search(gathered_embeddings.cpu().numpy(), self.topk)
+        D, I = self.index.search(gathered_embeddings.detach().cpu().numpy(), self.topk)
         regions = self.bed_regions[I]
         with open(self.output, "a") as out:
             self.write_results(out, filenames, names, regions, D)
@@ -260,6 +271,44 @@ class FaissQueryWriter(BasePredictionWriter):
 ## ------------------------------------------------------------------------------
 ## Datasets
 ## ------------------------------------------------------------------------------
+class FastqDataModule(L.LightningDataModule):
+    def __init__(
+        self,
+        filenames: Iterable[str],
+        tokenizer: AutoTokenizer,
+        num_workers: int,
+        batch_size: int,
+        remake_indices: bool = True,
+    ):
+        super().__init__()
+        self.filenames = filenames
+        self.remake_indices = remake_indices
+        self.tokenizer = tokenizer
+        self.num_workers = num_workers
+        self.batch_size = batch_size
+        self.datasets = [
+            FastqDataset(f, remake_index=self.remake_indices) for f in self.filenames
+        ]
+
+    def setup(self, stage):
+        self.dataloaders = [
+            DataLoader(
+                dataset,
+                num_workers=self.num_workers,
+                batch_size=self.batch_size,
+                worker_init_fn=FastqDataset.worker_init_fn,
+                collate_fn=functools.partial(
+                    dataset.collate_fn, tokenizer=self.tokenizer
+                ),
+                pin_memory=True,
+            )
+            for dataset in self.datasets
+        ]
+
+    def predict_dataloader(self):
+        return self.dataloaders
+
+
 class FastqDataset(Dataset):
     """
     Dataset for loading a fastq file using pyfastx and num_workers > 0.
@@ -365,10 +414,9 @@ class SlidingWindowReferenceFasta(Dataset):
         ## Make sliding window bed file to aid in retrieving windows of fasta sequence
         # we will write this file to disk for later use,
         # and load it into memory now for use in the dataset.
-        if not exists(self.bed_file):
-            self.chromosome_lengths = self._get_chromosome_lengths()
-            print(f"Making strided bed file for {fasta_path}.")
-            self._make_strided_bed(f"{self.bed_file}")
+        self.chromosome_lengths = self._get_chromosome_lengths()
+        print(f"Making strided bed file for {fasta_path}.")
+        self._make_strided_bed(f"{self.bed_file}")
         self.bed_regions = parse_bed(self.bed_file)
 
         ## Load the reference sequences into memory stored as a dict keyed by chromosome name

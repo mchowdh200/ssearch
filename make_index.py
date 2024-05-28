@@ -51,7 +51,7 @@ def parse_args():
         help="path to save the index",
     )
     parser.add_argument(
-        "--dim",
+        "--embeddings-dim",
         type=int,
         default=256,
         help="dimension of the embedding vectors",

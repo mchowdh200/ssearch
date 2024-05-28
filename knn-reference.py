@@ -11,7 +11,7 @@ from torch.utils.data import DataLoader
 from transformers import AutoTokenizer
 
 from models import SiameseModule
-from utils import (FaissIndexWriter, FastqDataset, KNNReferenceQueryWriter,
+from utils import (FaissIndexWriter, FastqDataModule, KNNReferenceQueryWriter,
                    SlidingWindowReferenceFasta, tokenize_batch)
 
 
@@ -76,17 +76,23 @@ def query_reference_index(args):
         args.tokenizer_checkpoint, trust_remote_code=True
     )
 
-    datasets = [FastqDataset(filename=fq) for fq in args.query_fastqs]
-    dataloaders = [
-        DataLoader(
-            dset,
-            batch_size=args.batch_size,
-            num_workers=args.num_workers,
-            shuffle=False,
-            collate_fn=partial(dset.collate_fn, tokenizer=tokenizer),
-        )
-        for dset in datasets
-    ]
+    # datasets = [FastqDataset(filename=fq) for fq in args.query_fastqs]
+    # dataloaders = [
+    #     DataLoader(
+    #         dset,
+    #         batch_size=args.batch_size,
+    #         num_workers=args.num_workers,
+    #         shuffle=False,
+    #         collate_fn=partial(dset.collate_fn, tokenizer=tokenizer),
+    #     )
+    #     for dset in datasets
+    # ]
+    datamodule = FastqDataModule(
+        filenames=args.query_fastqs,
+        tokenizer=tokenizer,
+        num_workers=args.num_workers,
+        batch_size=args.batch_size,
+    )
 
     query_writer = KNNReferenceQueryWriter(
         index=args.faiss_index,
@@ -99,7 +105,7 @@ def query_reference_index(args):
         strategy="auto",
         callbacks=[query_writer],
     )
-    trainer.predict(model, dataloaders=dataloaders, return_predictions=False)
+    trainer.predict(model, datamodule=datamodule, return_predictions=False)
 
 
 def parse_args():
