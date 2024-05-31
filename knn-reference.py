@@ -12,7 +12,7 @@ from transformers import AutoTokenizer
 
 from models import SiameseModule
 from utils import (FaissIndexWriter, FastqDataModule, KNNReferenceQueryWriter,
-                   SlidingWindowReferenceFasta, tokenize_batch)
+                   SlidingWindowReferenceFasta)
 
 
 def make_strided_bed(args):
