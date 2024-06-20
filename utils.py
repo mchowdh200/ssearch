@@ -53,10 +53,15 @@ def load_model(checkpoint: str) -> tuple[AutoModel, AutoTokenizer]:
 
 
 def tokenize_batch(batch: list[str], tokenizer) -> torch.Tensor:
-    return torch.LongTensor(
-        # TODO give option for upper or lower case
-        tokenizer([s.upper() for s in batch], padding="longest")["input_ids"]
-    )
+    return tokenizer(
+        [s.upper() for s in batch], padding="longest", return_tensors="pt"
+    )["input_ids"]
+    # return torch.tensor(
+    #     # TODO give option for upper or lower case
+    #     tokenizer([s.upper() for s in batch], padding="longest")["input_ids"],
+    #     dtype=torch.long,
+    #     device="cuda",
+    # )
 
 
 ## ------------------------------------------------------------------------------
@@ -75,8 +80,16 @@ class FaissIndexWriter(BasePredictionWriter):
     ):
         super().__init__(write_interval="batch")
         self.index_path = index_path
-        self.index = faiss.IndexFlatL2(dim)
         self.with_ids = with_ids
+
+        # hnsw params
+        M = 64
+        ef_search = 64
+        ef_construction = 128
+
+        self.index = faiss.IndexHNSWFlat(dim, M)
+        self.index.hnsw.efSearch = ef_search
+        self.index.hnsw.efConstruction = ef_construction
 
         if with_ids:
             self.index = faiss.IndexIDMap(self.index)
@@ -158,7 +171,9 @@ class KNNReferenceQueryWriter(BasePredictionWriter):
         # NOTE: we side step the ddp batch padding issue because of the zip
         for f, n, reg, dist in zip(fnames, names, regions, D):
             out.write(f"{f}\t{n}\t")
-            out.write("\t".join(f"{r.chrom}:{r.start}-{r.end},{d}" for r, d in zip(reg, dist)))
+            out.write(
+                "\t".join(f"{r.chrom}:{r.start}-{r.end},{d}" for r, d in zip(reg, dist))
+            )
             out.write("\n")
 
     def write_on_batch_end(
@@ -191,7 +206,6 @@ class KNNReferenceQueryWriter(BasePredictionWriter):
             gathered_embeddings = prediction
             filenames = batch["filename"]
             names = batch["name"]
-
 
         ## search and write results --------------------------------------------
         D, I = self.index.search(gathered_embeddings.detach().cpu().numpy(), self.topk)
@@ -290,7 +304,7 @@ class FastqDataModule(L.LightningDataModule):
             FastqDataset(f, remake_index=self.remake_indices) for f in self.filenames
         ]
 
-    def setup(self, stage):
+    def setup(self, stage=None):
         self.dataloaders = [
             DataLoader(
                 dataset,
@@ -301,6 +315,7 @@ class FastqDataModule(L.LightningDataModule):
                     dataset.collate_fn, tokenizer=self.tokenizer
                 ),
                 pin_memory=True,
+                prefetch_factor=4,
             )
             for dataset in self.datasets
         ]
@@ -415,8 +430,9 @@ class SlidingWindowReferenceFasta(Dataset):
         # we will write this file to disk for later use,
         # and load it into memory now for use in the dataset.
         self.chromosome_lengths = self._get_chromosome_lengths()
-        print(f"Making strided bed file for {fasta_path}.")
-        self._make_strided_bed(f"{self.bed_file}")
+        if not exists(self.bed_file):
+            print(f"Making strided bed file for {fasta_path}.")
+            self._make_strided_bed(f"{self.bed_file}")
         self.bed_regions = parse_bed(self.bed_file)
 
         ## Load the reference sequences into memory stored as a dict keyed by chromosome name
@@ -456,13 +472,13 @@ class SlidingWindowReferenceFasta(Dataset):
         - stride: stride of the sliding window
         """
         with open(outfile, "w") as f:
+            i = 0
             for chrom, length in self.chromosome_lengths.items():
                 # write bed intervals along with a unique int id
-                for i, start in enumerate(
-                    range(0, length - self.window_size + 1, self.stride)
-                ):
+                for start in range(0, length - self.window_size + 1, self.stride):
                     end = start + self.window_size
                     f.write(f"{chrom}\t{start}\t{end}\t{i}\n")
+                    i += 1
 
     def __getitem__(self, idx: int):
         r = self.bed_regions[idx]

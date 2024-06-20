@@ -1,6 +1,7 @@
 #!/bin/env bash
 #SBATCH --job-name=test-knn-reference
 #SBATCH --partition=nvidia-a100
+#SBATCH --nodelist=fijigpu-04
 #SBATCH --gres=gpu:4
 #SBATCH --nodes=1
 #SBATCH --mem=500G
@@ -8,12 +9,30 @@
 #SBATCH --cpus-per-task=32
 #SBATCH --output=test-knn-reference.out
 #SBATCH --error=test-knn-reference.err
+#SBATCH --signal=SIGUSR1@90
 
 set -e
 
-# make a work directory
-workdir="/localscratch/murad"
+# cleanup() {
+#     echo "Saving work and cleaning up"
+#     rsync -a $workdir/ $savedir/
+#     rm -r $workdir
+# }
+# trap cleanup EXIT SIGINT SIGTERM SIGUSR1
+
+
+## ----------------------------------------------------------------------------
+## Setup
+## TODO try something other than hg002 (eg something from 1kg)
+## ----------------------------------------------------------------------------
+workdir="/cache/murad"
 mkdir -p $workdir
+
+savedir="/scratch/Shares/layer/projects/sequence_similarity_search/knn-reference-test"
+if [ -d $savedir ]; then
+    echo "Restoring from previous run"
+    cp -r $savedir/. $workdir/
+fi
 
 ref="$workdir/GRCh38_full_analysis_set_plus_decoy_hla.fa"
 bed="$workdir/GRCh38_full_analysis_set_plus_decoy_hla.fa.bed"
@@ -30,20 +49,27 @@ fastq2_url='ftp://ftp-trace.ncbi.nlm.nih.gov/ReferenceSamples/giab/data/Ashkenaz
 fq1=$(basename $fastq1_url)
 fq2=$(basename $fastq2_url)
 
+
+## ----------------------------------------------------------------------------
+## BUILD INDEX
+## ----------------------------------------------------------------------------
 if [ ! -f $faiss_index ]; then
     echo "Indexing reference genome"
     python3 knn-reference.py build \
         --fasta $ref \
         --window-size 150 \
-        --stride 50 \
+        --stride 25 \
         --checkpoint-path "fine-tuning-normalized/epoch=6-val_loss=0.0079.ckpt" \
         --batch-size 4096 \
         --embeddings-dim 256 \
         --num-workers 16 \
-        --devices 1
+        --devices 4
         # --chromosome-names chr22 # add this line for quick testing
 fi
 
+## ----------------------------------------------------------------------------
+## QUERY WITH HG002
+## ----------------------------------------------------------------------------
 if [ ! -f "$workdir/$fq1" ]; then
     wget $fastq1_url -O $workdir/$fq1
 fi
@@ -60,8 +86,6 @@ python knn-reference.py query \
     --checkpoint-path "fine-tuning-normalized/epoch=6-val_loss=0.0079.ckpt" \
     --batch-size 512 \
     --devices 1 \
-    --num-workers 0 \
+    --num-workers 16 \
     --topk 10 \
     --output $workdir/knn-reference-queries.txt
-
-rm -r $workdir
