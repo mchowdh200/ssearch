@@ -1,24 +1,24 @@
 import lightning as L
 import torch
-from config import DefaultConfig
-from data_utils.datasets import SiameseDataset, get_tokenizer
 from lightning.pytorch import callbacks
 from lightning.pytorch.loggers import WandbLogger
 from torch.utils.data import DataLoader
 
-from models.siamese import SiameseModule
-from models.transformer_encoder import TransformerEncoder
+from ssearch.config import DefaultConfig
+from ssearch.data_utils.datasets import SiameseDataset, get_tokenizer
+from ssearch.models.siamese import SiameseModule
+from ssearch.models.transformer_encoder import TransformerEncoder
 
 
 def main():
     train_dataset = SiameseDataset(
         data=DefaultConfig.TrainingData.TRAIN_DATA,
-        max_length=DefaultConfig.Model.SEQUENCE_LENGTH,
+        # max_length=DefaultConfig.Model.SEQUENCE_LENGTH,
         base_model=DefaultConfig.Model.BASE_MODEL,
     )
     val_dataset = SiameseDataset(
         data=DefaultConfig.TrainingData.VAL_DATA,
-        max_length=DefaultConfig.Model.SEQUENCE_LENGTH,
+        # max_length=DefaultConfig.Model.SEQUENCE_LENGTH,
         base_model=DefaultConfig.Model.BASE_MODEL,
     )
 

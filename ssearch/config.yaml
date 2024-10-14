@@ -1,21 +1,21 @@
 ModelConfig:
     BASE_MODEL: "InstaDeepAI/nucleotide-transformer-v2-50m-multi-species"
-    SEQUENCE_LENGTH: 150
+    # SEQUENCE_LENGTH: 150 # TODO prob dont need since embedding aggregation takes padding into account
 
 TrainingDataConfig:
-    TRAIN_DATA: ""
-    VAL_DATA: ""
+    TRAIN_DATA: "/scratch/Shares/layer/projects/sequence_similarity_search/training_data/grch38-gg-silva.txt"
+    VAL_DATA: "/scratch/Shares/layer/projects/sequence_similarity_search/training_data/mpox-subsampled.txt"
 
 TrainerConfig:
     DEVICES: 1
-    EPOCHS: 10
-    BATCH_SIZE: 32
-    NUM_WORKERS: 0
+    EPOCHS: 100
+    BATCH_SIZE: 192
+    NUM_WORKERS: 16
     LEARNING_RATE: 1e-4
-    WEIGHT_DECAY: 0.0
+    WEIGHT_DECAY: 1e-2
 
 LoggingConfig:
-    NAME: "name"
-    PROJECT: "project"
+    NAME: "nucleotide-transformer-finetune"
+    PROJECT: "ssearch"
     PROGRESS_BAR: False
     CHECKPOINT_DIR: "CHECKPOINTS"

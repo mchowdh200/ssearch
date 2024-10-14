@@ -3,6 +3,7 @@ Global constants used throughout the project
 """
 
 from dataclasses import dataclass
+from os.path import abspath, dirname
 from typing import Optional
 
 from yaml import safe_load
@@ -11,7 +12,7 @@ from yaml import safe_load
 @dataclass(kw_only=True)
 class ModelConfig:
     BASE_MODEL: str
-    SEQUENCE_LENGTH: int
+    # SEQUENCE_LENGTH: int
 
 
 @dataclass(kw_only=True)
@@ -39,7 +40,13 @@ class LoggingConfig:
 
 
 class Config:
-    def __init__(self, Model: ModelConfig, TrainingData: TrainingDataConfig, Trainer: TrainerConfig, Logging: LoggingConfig):
+    def __init__(
+        self,
+        Model: ModelConfig,
+        TrainingData: TrainingDataConfig,
+        Trainer: TrainerConfig,
+        Logging: LoggingConfig,
+    ):
         self.Model = Model
         self.TrainingData = TrainingData
         self.Trainer = Trainer
@@ -65,4 +72,4 @@ class Config:
         }
 
 
-DefaultConfig = Config.from_yaml("config.yaml")
+DefaultConfig = Config.from_yaml(dirname(abspath(__file__)) + "/config.yaml")

@@ -14,13 +14,12 @@ class SiameseDataset(Dataset):
     where A, B are sequences and sim is a float similarity score.
     """
 
-    def __init__(self, data: str, max_length: int, base_model: str):
+    def __init__(self, data: str, base_model: str):
         # We're assuming the data fits in memory.
         # Otherwise we'd need to use some kind of
         # lazy loading alternative to the dataframe.
         self.data = pd.read_csv(data, sep="\t", names=["A", "B", "sim"])
         self.tokenizer = get_tokenizer(base_model)
-        self.max_length = max_length
         self.base_model = base_model
 
     def __len__(self):
@@ -33,8 +32,7 @@ class SiameseDataset(Dataset):
         return self.tokenizer.batch_encode_plus(
             batch,
             return_tensors="pt",
-            padding="max_length",
-            max_length=self.max_length,
+            padding="longest",
         )["input_ids"]
 
     def collate_fn(self, batch: list[dict]):
