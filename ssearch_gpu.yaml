@@ -1,0 +1,12 @@
+name: ssearch
+channels:
+  - pytorch
+  - nvidia
+  - conda-forge
+dependencies:
+  - transformers == 4.43.2
+  - pytorch == 2.4.1
+  - pytorch-cuda = 12.1
+  - pytorch-lightning == 2.4.0
+  - lightning == 2.4.0
+  - lightning-utilities == 0.11.7
