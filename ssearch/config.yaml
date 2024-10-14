@@ -1,0 +1,21 @@
+ModelConfig:
+    BASE_MODEL: "InstaDeepAI/nucleotide-transformer-v2-50m-multi-species"
+    SEQUENCE_LENGTH: 150
+
+TrainingDataConfig:
+    TRAIN_DATA: ""
+    VAL_DATA: ""
+
+TrainerConfig:
+    DEVICES: 1
+    EPOCHS: 10
+    BATCH_SIZE: 32
+    NUM_WORKERS: 0
+    LEARNING_RATE: 1e-4
+    WEIGHT_DECAY: 0.0
+
+LoggingConfig:
+    NAME: "name"
+    PROJECT: "project"
+    PROGRESS_BAR: False
+    CHECKPOINT_DIR: "CHECKPOINTS"
