@@ -6,6 +6,7 @@ from lightning.pytorch import callbacks
 from lightning.pytorch.loggers import WandbLogger
 from torch.utils.data import DataLoader
 
+from models.siamese import SiameseModule
 from models.transformer_encoder import TransformerEncoder
 
 
@@ -36,6 +37,11 @@ def main():
 
     model = TransformerEncoder(model_version=DefaultConfig.Model.BASE_MODEL)
     model = model.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+    siamese_module = SiameseModule(
+        model,
+        learning_rate=DefaultConfig.Trainer.LEARNING_RATE,
+        weight_decay=DefaultConfig.Trainer.WEIGHT_DECAY,
+    )
 
     logger = WandbLogger(
         name=DefaultConfig.Logging.NAME,
@@ -66,4 +72,4 @@ def main():
         logger=logger,
         callbacks=trainer_callbacks,
     )
-    trainer.fit(model, train_loader, val_loader)
+    trainer.fit(siamese_module, train_loader, val_loader)

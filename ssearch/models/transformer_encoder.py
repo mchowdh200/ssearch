@@ -1,11 +1,8 @@
-from importlib import import_module
-
-import lightning as L
 import torch
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 
-class TransformerEncoder(L.LightningModule):
+class TransformerEncoder(torch.nn.Module):
     """
     Transformer encoder initialized from a huggingface model.
     """
