@@ -12,15 +12,11 @@ class TransformerEncoder(torch.nn.Module):
         self.model = AutoModelForMaskedLM.from_pretrained(
             model_version, trust_remote_code=True
         )
-        # we're just loading the tokenizer to get the pad token id
-        tokenizer = AutoTokenizer.from_pretrained(model_version, trust_remote_code=True)
-        self.pad_token_id = tokenizer.pad_token_id
 
-    def forward(self, input_ids):
+    def forward(self, input_ids, attention_mask):
         """
         Get output embeddings
         """
-        attention_mask = input_ids != self.pad_token_id
         embeddings = self.model(
             input_ids,
             attention_mask=attention_mask,

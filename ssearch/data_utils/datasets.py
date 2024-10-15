@@ -20,6 +20,7 @@ class SiameseDataset(Dataset):
         # lazy loading alternative to the dataframe.
         self.data = pd.read_csv(data, sep="\t", names=["A", "B", "sim"])
         self.tokenizer = get_tokenizer(base_model)
+        self.pad_token_id = self.tokenizer.pad_token_id
         self.base_model = base_model
 
     def __len__(self):
@@ -37,9 +38,13 @@ class SiameseDataset(Dataset):
 
     def collate_fn(self, batch: list[dict]):
         A, B, sim = zip(*[(x["A"], x["B"], x["sim"]) for x in batch])
+        A_mask = A != self.pad_token_id
+        B_mask = B != self.pad_token_id
 
         return {
             "A": self.tokenize_batch(A),
+            "A_mask": torch.BoolTensor(A_mask),
             "B": self.tokenize_batch(B),
+            "B_mask": torch.BoolTensor(B_mask),
             "sim": torch.FloatTensor(sim),
         }
