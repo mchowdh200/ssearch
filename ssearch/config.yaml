@@ -7,12 +7,12 @@ TrainingDataConfig:
     VAL_DATA: "/scratch/Shares/layer/projects/sequence_similarity_search/training_data/mpox-subsampled.txt"
 
 TrainerConfig:
-    DEVICES: 1
+    DEVICES: 4
     EPOCHS: 100
-    BATCH_SIZE: 192
-    NUM_WORKERS: 16
-    LEARNING_RATE: 1e-4
-    WEIGHT_DECAY: 1e-2
+    BATCH_SIZE: 1024
+    NUM_WORKERS: 32
+    LEARNING_RATE: 1.0e-4
+    WEIGHT_DECAY: 1.0e-2
 
 LoggingConfig:
     NAME: "nucleotide-transformer-finetune"

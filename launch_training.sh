@@ -1,10 +1,10 @@
 #!/bin/env bash
 #SBATCH --job-name=finetune
 #SBATCH --partition=nvidia-a100
-#SBATCH --gres=gpu:1
+#SBATCH --gres=gpu:4
 #SBATCH --time=00:15:00
-#SBATCH --mem=16GB
-#SBATCH --tasks-per-node=1
+#SBATCH --mem=500GB
+#SBATCH --cpus-per-task=32
 #SBATCH --nodes=1
 #SBATCH --output=fine-tuning.out
 #SBATCH --error=fine-tuning.err

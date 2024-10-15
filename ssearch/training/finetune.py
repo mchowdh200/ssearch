@@ -36,7 +36,9 @@ def main():
     )
 
     model = TransformerEncoder(model_version=DefaultConfig.Model.BASE_MODEL)
-    model = model.to(torch.device("cuda" if torch.cuda.is_available() else "cpu"))
+    model = model.to(
+        torch.device(torch.device("cuda") if torch.cuda.is_available() else "cpu")
+    )
     siamese_module = SiameseModule(
         model,
         learning_rate=DefaultConfig.Trainer.LEARNING_RATE,
