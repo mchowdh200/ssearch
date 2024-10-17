@@ -1,4 +1,5 @@
 import torch
+from peft import IA3Config, IA3Model
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 
@@ -9,8 +10,10 @@ class TransformerEncoder(torch.nn.Module):
 
     def __init__(self, model_version):
         super().__init__()
-        self.model = AutoModelForMaskedLM.from_pretrained(
-            model_version, trust_remote_code=True
+        ia3_config = IA3Config()
+        self.model = IA3Model(
+            AutoModelForMaskedLM.from_pretrained(model_version, trust_remote_code=True),
+            ia3_config,
         )
 
     def forward(self, input_ids, attention_mask):
