@@ -14,6 +14,7 @@ class TransformerEncoder(torch.nn.Module):
         self.model = IA3Model(
             AutoModelForMaskedLM.from_pretrained(model_version, trust_remote_code=True),
             ia3_config,
+            adapter_name="nucleotide-transformer-ia3-ssearch",
         )
 
     def forward(self, input_ids, attention_mask):
