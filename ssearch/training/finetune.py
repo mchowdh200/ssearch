@@ -27,13 +27,17 @@ def main():
         batch_size=DefaultConfig.Trainer.BATCH_SIZE,
         shuffle=True,
         collate_fn=train_dataset.collate_fn,
+        num_workers=DefaultConfig.Trainer.NUM_WORKERS,
     )
     val_loader = DataLoader(
         val_dataset,
         batch_size=DefaultConfig.Trainer.BATCH_SIZE,
         shuffle=False,
         collate_fn=val_dataset.collate_fn,
+        num_workers=DefaultConfig.Trainer.NUM_WORKERS,
     )
+
+    torch.set_float32_matmul_precision("high")
 
     model = TransformerEncoder(model_version=DefaultConfig.Model.BASE_MODEL)
     model = model.to(
@@ -70,8 +74,14 @@ def main():
     trainer = L.Trainer(
         devices=DefaultConfig.Trainer.DEVICES,
         accelerator="auto",
+        precision="16-mixed",
+        strategy=(
+            "ddp_find_unused_parameters_true"
+            if DefaultConfig.Trainer.DEVICES > 1
+            else "auto"
+        ),
         max_epochs=DefaultConfig.Trainer.EPOCHS,
-        logger=logger,
         callbacks=trainer_callbacks,
+        logger=logger,
     )
     trainer.fit(siamese_module, train_loader, val_loader)

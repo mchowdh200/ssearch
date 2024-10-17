@@ -11,7 +11,7 @@ class TransformerEncoder(torch.nn.Module):
         super().__init__()
         self.model = AutoModelForMaskedLM.from_pretrained(
             model_version, trust_remote_code=True
-        )
+        ).base_model
 
     def forward(self, input_ids, attention_mask):
         """
@@ -21,8 +21,8 @@ class TransformerEncoder(torch.nn.Module):
             input_ids,
             attention_mask=attention_mask,
             encoder_attention_mask=attention_mask,
-            output_hidden_states=True,
-        )["hidden_states"][-1]
+            output_hidden_states=False,
+        ).last_hidden_state
         attention_mask = attention_mask.unsqueeze(-1)
         return torch.sum(attention_mask * embeddings, dim=1) / torch.sum(
             attention_mask, dim=1
