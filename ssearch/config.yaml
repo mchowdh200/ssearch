@@ -9,13 +9,13 @@ TrainingDataConfig:
 TrainerConfig:
     DEVICES: 4
     EPOCHS: 100
-    BATCH_SIZE: 1024
+    BATCH_SIZE: 256
     NUM_WORKERS: 32
     LEARNING_RATE: 1.0e-4
-    WEIGHT_DECAY: 1.0e-2
+    WEIGHT_DECAY: 0.1
 
 LoggingConfig:
-    NAME: "nucleotide-transformer-finetune"
-    PROJECT: "ssearch"
+    NAME: "nt-ia3"
+    PROJECT: "seq-similarity"
     PROGRESS_BAR: False
-    CHECKPOINT_DIR: "CHECKPOINTS"
+    CHECKPOINT_DIR: "CHECKPOINTS-IA3"
