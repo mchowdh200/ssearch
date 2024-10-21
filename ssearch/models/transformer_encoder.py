@@ -20,6 +20,7 @@ class TransformerEncoder(L.LightningModule):
             ia3_config,
             adapter_name="nucleotide-transformer-ia3-ssearch",
         )
+        self.save_hyperparameters()
 
     def forward(self, input_ids, attention_mask):
         """
