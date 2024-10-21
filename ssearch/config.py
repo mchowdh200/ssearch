@@ -29,6 +29,8 @@ class TrainerConfig:
     NUM_WORKERS: int
     LEARNING_RATE: float
     WEIGHT_DECAY: float
+    ACCUMULATE_GRAD_BATCHES: int
+    SIMILARITY_THRESHOLD: float
 
 
 @dataclass(kw_only=True)

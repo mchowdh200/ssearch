@@ -43,11 +43,12 @@ class SiameseDataset(Dataset):
         B_ids = self.tokenize_batch(B)
         A_mask = torch.where(A_ids != self.pad_token_id, True, False)
         B_mask = torch.where(B_ids != self.pad_token_id, True, False)
+        sim = torch.FloatTensor(sim)
 
         return {
             "A": A_ids,
             "B": B_ids,
             "A_mask": A_mask,
             "B_mask": B_mask,
-            "sim": torch.FloatTensor(sim),
+            "sim": sim,
         }

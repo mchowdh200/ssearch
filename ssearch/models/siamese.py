@@ -1,14 +1,6 @@
 import lightning as L
 import torch
-
-
-def compute_margin(sim: torch.Tensor, similarity_threshold: float, margin_max: float):
-    """
-    Margin for constrastive loss that depends on the similarity between examples
-    """
-    return (margin_max / 2) * (
-        1 + torch.cos((2 * torch.pi / similarity_threshold) * sim)
-    )
+import torch.nn.functional as F
 
 
 def constrastive_loss(
@@ -16,19 +8,29 @@ def constrastive_loss(
     v: torch.Tensor,
     sim: torch.Tensor,
     similarity_threshold: float,
-    margin_max: float,
 ):
     """
-    Version of contrastive loss that is geared towards continuous similarity instead of binary labels.
+    Modified version of contrastive loss that is geared towards continuous similarity
+    instead of binary labels. For similar pairs, the loss is only computed if the
+    predicted similarity is less than the actual similarity. For dissimilar pairs,
+    the loss is only computed if the predicted similarity is greater than the actual
+    similarity.
     u, v: embeddings of the input sequences
     sim: similarity between the pairs
     """
-    margin = compute_margin(sim, similarity_threshold, margin_max)
     pred_sim = torch.cosine_similarity(u, v)
-    error = torch.functional.norm(pred_sim - sim, p=2)
-    diff = margin - error
-
-    return torch.where(diff > 0, error, 0)
+    return (
+        (sim > similarity_threshold)
+        * torch.where(
+            pred_sim - sim < 0,
+            F.mse_loss(pred_sim, sim, reduction="none"), # penalize more for underestimation
+            F.huber_loss(pred_sim, sim, reduction="none"),
+        )
+        + (sim <= similarity_threshold)
+        * torch.where(
+            pred_sim - sim > 0, F.mse_loss(pred_sim, sim, reduction="none"), 0
+        )
+    ).mean()
 
 
 class SiameseModule(L.LightningModule):
@@ -39,14 +41,12 @@ class SiameseModule(L.LightningModule):
         learning_rate: float,
         weight_decay: float,
         similarity_threshold: float,
-        margin_max: float,
     ):
         super().__init__()
         self.model = model
         self.learning_rate = learning_rate
         self.weight_decay = weight_decay
         self.similarity_threshold = similarity_threshold
-        self.margin_max = margin_max
         self.save_hyperparameters()
 
     def forward(self, batch: dict):
@@ -63,9 +63,10 @@ class SiameseModule(L.LightningModule):
         )
         u = self.model(A, attention_mask=A_mask)
         v = self.model(B, attention_mask=B_mask)
-        pred = torch.cosine_similarity(u, v)
-        mse = torch.nn.functional.mse_loss(pred, sim)
-        loss = constrastive_loss(u, v, sim, self.similarity_threshold, self.margin_max)
+        with torch.no_grad():
+            pred = torch.cosine_similarity(u, v)
+            mse = torch.nn.functional.mse_loss(pred, sim)
+        loss = constrastive_loss(u, v, sim, self.similarity_threshold)
         return loss, mse
 
     def training_step(self, batch, _):

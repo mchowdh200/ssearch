@@ -47,6 +47,7 @@ def main():
         model,
         learning_rate=DefaultConfig.Trainer.LEARNING_RATE,
         weight_decay=DefaultConfig.Trainer.WEIGHT_DECAY,
+        similarity_threshold=DefaultConfig.Trainer.SIMILARITY_THRESHOLD,
     )
 
     logger = WandbLogger(
@@ -80,6 +81,7 @@ def main():
             if DefaultConfig.Trainer.DEVICES > 1
             else "auto"
         ),
+        accumulate_grad_batches=DefaultConfig.Trainer.ACCUMULATE_GRAD_BATCHES,
         max_epochs=DefaultConfig.Trainer.EPOCHS,
         callbacks=trainer_callbacks,
         logger=logger,

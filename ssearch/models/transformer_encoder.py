@@ -10,7 +10,10 @@ class TransformerEncoder(torch.nn.Module):
 
     def __init__(self, model_version):
         super().__init__()
-        ia3_config = IA3Config()
+        ia3_config = IA3Config(
+            target_modules=["key", "value", "dense"],
+            feedforward_modules=["dense"]
+        )
         self.model = IA3Model(
             AutoModelForMaskedLM.from_pretrained(model_version, trust_remote_code=True).base_model,
             ia3_config,
