@@ -23,7 +23,9 @@ def constrastive_loss(
         (sim > similarity_threshold)
         * torch.where(
             pred_sim - sim < 0,
-            F.mse_loss(pred_sim, sim, reduction="none"), # penalize more for underestimation
+            F.mse_loss(
+                pred_sim, sim, reduction="none"
+            ),  # penalize more for underestimation
             F.huber_loss(pred_sim, sim, reduction="none"),
         )
         + (sim <= similarity_threshold)
@@ -37,7 +39,7 @@ class SiameseModule(L.LightningModule):
 
     def __init__(
         self,
-        model: torch.nn.Module,
+        model: L.LightningModule,
         learning_rate: float,
         weight_decay: float,
         similarity_threshold: float,

@@ -1,9 +1,10 @@
 import torch
+import lightning as L
 from peft import IA3Config, IA3Model
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 
-class TransformerEncoder(torch.nn.Module):
+class TransformerEncoder(L.LightningModule):
     """
     Transformer encoder initialized from a huggingface model.
     """
