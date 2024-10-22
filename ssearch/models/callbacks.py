@@ -3,6 +3,7 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Literal, Optional, Union
 
+import lightning as L
 import torch
 from lightning.fabric.utilities.types import _PATH
 from lightning.pytorch.callbacks import ModelCheckpoint
@@ -11,6 +12,7 @@ from lightning.pytorch.callbacks import ModelCheckpoint
 class PEFTAdapterCheckpoint(ModelCheckpoint):
     """
     Save only the PEFT adapter instead of the whole .ckpt file for checkpointing.
+    We are using the Siamese model which contains a base model that has the PEFT adapter.
     """
 
     def __init__(
@@ -29,6 +31,9 @@ class PEFTAdapterCheckpoint(ModelCheckpoint):
         every_n_epochs: Optional[int] = None,
         save_on_train_epoch_end: Optional[bool] = None,
         enable_version_counter: bool = True,
+
+        # module inside the LightningModule that contains the PEFT adapter
+        module_name: Optional[str] = None,
     ):
         super().__init__(
             dirpath=dirpath,
@@ -44,25 +49,16 @@ class PEFTAdapterCheckpoint(ModelCheckpoint):
             every_n_epochs=every_n_epochs,
             save_on_train_epoch_end=save_on_train_epoch_end,
         )
+        self.module_name = module_name.split(".") if module_name else None
 
-    def _is_peft_module(self, module: torch.nn.Module) -> bool:
-        if hasattr(module, "peft_config"):
-            return True
-        return False
+    def _get_module(self, pl_module: L.LightningModule):
+        if self.module_name is None:
+            return pl_module
 
-    def _find_peft_module(self, module: torch.nn.Module) -> Optional[torch.nn.Module]:
-        """
-        Recursively search for the PEFT adapter module in the model.
-        """
-        if self._is_peft_module(module):
-            return module
-
-        for child in module.children():
-            peft_module = self._find_peft_module(child)
-            if peft_module is not None:
-                return peft_module
-
-        return None
+        module = pl_module
+        for name in self.module_name:
+            module = getattr(module, name)
+        return module
 
     def _save_checkpoint(self, trainer, filepath) -> None:
         """
