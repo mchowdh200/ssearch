@@ -7,6 +7,7 @@ import lightning as L
 import torch
 from lightning.fabric.utilities.types import _PATH
 from lightning.pytorch.callbacks import ModelCheckpoint
+from peft.tuners.tuners_utils import BaseTuner
 
 
 # TODO need to make more robust
@@ -33,7 +34,6 @@ class PEFTAdapterCheckpoint(ModelCheckpoint):
         every_n_epochs: Optional[int] = None,
         save_on_train_epoch_end: Optional[bool] = None,
         enable_version_counter: bool = True,
-
         # module inside the LightningModule that contains the PEFT adapter
         module_name: Optional[str] = None,
     ):
@@ -61,10 +61,8 @@ class PEFTAdapterCheckpoint(ModelCheckpoint):
         for name in self.module_name:
             module = getattr(module, name)
 
-        if not hasattr(module, "peft_config"):
-            raise ValueError(
-                "Could not find PEFT adapter module in provided module."
-            )
+        if not isinstance(module, BaseTuner):
+            raise ValueError("Could not find PEFT adapter module in provided module.")
         return module
 
     def _save_checkpoint(self, trainer, filepath) -> None:
