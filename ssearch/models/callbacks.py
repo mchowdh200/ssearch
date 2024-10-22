@@ -60,6 +60,10 @@ class PEFTAdapterCheckpoint(ModelCheckpoint):
         module = pl_module
         for name in self.module_name:
             module = getattr(module, name)
+
+        if not hasattr(module, "peft_config"):
+            raise ValueError(
+                "Could not find PEFT adapter module in provided module."
         return module
 
     def _save_checkpoint(self, trainer, filepath) -> None:
