@@ -1,11 +1,12 @@
 import lightning as L
 import torch
-from lightning.pytorch import callbacks
+from lightning.pytorch.callbacks import EarlyStopping
 from lightning.pytorch.loggers import WandbLogger
 from torch.utils.data import DataLoader
 
 from ssearch.config import DefaultConfig
 from ssearch.data_utils.datasets import SiameseDataset, get_tokenizer
+from ssearch.models.callbacks import PEFTAdapterCheckpoint
 from ssearch.models.siamese import SiameseModule
 from ssearch.models.transformer_encoder import TransformerEncoder
 
@@ -58,14 +59,14 @@ def main():
     logger.log_hyperparams(DefaultConfig.to_dict())
 
     trainer_callbacks = [
-        callbacks.ModelCheckpoint(
+        PEFTAdapterCheckpoint(
             DefaultConfig.Logging.CHECKPOINT_DIR,
             monitor="val_loss",
             filename="{epoch}-{val_loss:.4f}",
             save_top_k=1,
             mode="min",
         ),
-        callbacks.EarlyStopping(
+        EarlyStopping(
             monitor="val_loss",
             patience=5,
             mode="min",
