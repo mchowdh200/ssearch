@@ -64,6 +64,7 @@ class PEFTAdapterCheckpoint(ModelCheckpoint):
         if not hasattr(module, "peft_config"):
             raise ValueError(
                 "Could not find PEFT adapter module in provided module."
+            )
         return module
 
     def _save_checkpoint(self, trainer, filepath) -> None:
