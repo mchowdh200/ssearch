@@ -9,6 +9,8 @@ from lightning.fabric.utilities.types import _PATH
 from lightning.pytorch.callbacks import ModelCheckpoint
 
 
+# TODO need to make more robust
+# TODO need to implement the keep_top_k functionality
 class PEFTAdapterCheckpoint(ModelCheckpoint):
     """
     Save only the PEFT adapter instead of the whole .ckpt file for checkpointing.
@@ -65,7 +67,7 @@ class PEFTAdapterCheckpoint(ModelCheckpoint):
         Override the save checkpoint method to save PEFT adapter weights instead
         of the full model checkpoint.
         """
-        peft_model = self._find_peft_module(trainer.lightning_module)
+        peft_model = self._get_module(trainer.lightning_module)
 
         if peft_model is None:
             raise ValueError(
