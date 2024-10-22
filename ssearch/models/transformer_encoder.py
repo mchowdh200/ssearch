@@ -1,6 +1,6 @@
-import torch
 import lightning as L
-from peft import IA3Config, IA3Model
+import torch
+from peft import IA3Config, get_peft_model
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 
@@ -12,13 +12,13 @@ class TransformerEncoder(L.LightningModule):
     def __init__(self, model_version):
         super().__init__()
         ia3_config = IA3Config(
-            target_modules=["key", "value", "dense"],
-            feedforward_modules=["dense"]
+            target_modules=["key", "value", "dense"], feedforward_modules=["dense"]
         )
-        self.model = IA3Model(
-            AutoModelForMaskedLM.from_pretrained(model_version, trust_remote_code=True).base_model,
-            ia3_config,
-            adapter_name="nucleotide-transformer-ia3-ssearch",
+        base_model = AutoModelForMaskedLM.from_pretrained(
+            model_version, trust_remote_code=True
+        ).base_model
+        self.model = get_peft_model(
+            base_model, ia3_config, adapter_name="nucleotide-transformer-ia3-ssearch"
         )
         self.save_hyperparameters()
 
