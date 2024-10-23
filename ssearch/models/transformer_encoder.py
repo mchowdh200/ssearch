@@ -1,16 +1,31 @@
+from os.path import basename
+
 import lightning as L
 import torch
-from peft import IA3Config, get_peft_model
+from peft import IA3Config, PeftModel, get_peft_model
 from transformers import AutoModelForMaskedLM, AutoTokenizer
 
 
-class TransformerEncoder(L.LightningModule):
+class TransformerEncoder(torch.nn.Module):
     """
     Transformer encoder initialized from a huggingface model.
     """
 
-    def __init__(self, model_version):
+    def __init__(self, model_version, checkpoint=None):
+        """
+        init with pretrained foundation model and wrap with new or pretrained PEFT adapter
+        """
         super().__init__()
+        if checkpoint:
+            self.model = PeftModel.from_pretrained(
+                model=AutoModelForMaskedLM.from_pretrained(
+                    model_version, trust_remote_code=True
+                ).base_model,
+                model_id=checkpoint,
+                adapter_name=basename(checkpoint),
+            )
+            return
+
         ia3_config = IA3Config(
             target_modules=["key", "value", "dense"], feedforward_modules=["dense"]
         )
@@ -20,7 +35,6 @@ class TransformerEncoder(L.LightningModule):
         self.model = get_peft_model(
             base_model, ia3_config, adapter_name="nucleotide-transformer-ia3-ssearch"
         )
-        self.save_hyperparameters()
 
     def forward(self, input_ids, attention_mask):
         """
