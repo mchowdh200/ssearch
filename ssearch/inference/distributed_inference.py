@@ -29,10 +29,6 @@ def setup_process(rank: int, world_size: int):
     )
 
 
-def cleanup():
-    dist.destroy_process_group()
-
-
 @dataclass(kw_only=True)
 class DistributedInference:
     model_factory: Callable[..., torch.nn.Module]
@@ -45,6 +41,7 @@ class DistributedInference:
     dataloader_collate_fn: Callable[[Any], Any] = default_collate
     output_shape: Optional[tuple] = None
     dtype: DTypeLike = np.float32
+    num_gpus: int = 1
     use_amp: bool = True
     amp_dtype: torch.dtype = torch.float16
 
@@ -136,7 +133,8 @@ class DistributedInference:
 
         mmap.flush()
         del mmap
-        cleanup()
+        dist.barrier()
+        dist.destroy_process_group()
 
     def run(self):
         """Launch distributed inference across all available GPUs."""
@@ -147,7 +145,7 @@ class DistributedInference:
                 )
                 self.amp_dtype = torch.float16
 
-        world_size = torch.cuda.device_count()
+        world_size = max(self.num_gpus, torch.cuda.device_count())
         mp.spawn(self.worker, args=(world_size,), nprocs=world_size, join=True)
 
         # Combine results from all workers

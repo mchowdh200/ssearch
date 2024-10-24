@@ -41,18 +41,25 @@ class LoggingConfig:
     CHECKPOINT_DIR: str
 
 
+@dataclass(kw_only=True)
+class InferenceConfig:
+    BASE_MODEL: str
+    ADAPTER_CHECKPOINT: str
+    OUTPUT_DIR: str
+    BATCH_SIZE: int
+    NUM_WORKERS_PER_GPU: int
+    NUM_GPUS: int
+    USE_AMP: bool
+    METAGENOMIC_DATA: str
+
+
+@dataclass(kw_only=True)
 class Config:
-    def __init__(
-        self,
-        Model: ModelConfig,
-        TrainingData: TrainingDataConfig,
-        Trainer: TrainerConfig,
-        Logging: LoggingConfig,
-    ):
-        self.Model = Model
-        self.TrainingData = TrainingData
-        self.Trainer = Trainer
-        self.Logging = Logging
+    Model: ModelConfig
+    TrainingData: TrainingDataConfig
+    Trainer: TrainerConfig
+    Logging: LoggingConfig
+    Inference: InferenceConfig
 
     @staticmethod
     def from_yaml(config_path: str):
@@ -63,6 +70,7 @@ class Config:
             TrainingData=TrainingDataConfig(**config["TrainingDataConfig"]),
             Trainer=TrainerConfig(**config["TrainerConfig"]),
             Logging=LoggingConfig(**config["LoggingConfig"]),
+            Inference=InferenceConfig(**config["InferenceConfig"]),
         )
 
     def to_dict(self):
@@ -71,6 +79,7 @@ class Config:
             "TrainingDataConfig": self.TrainingData.__dict__,
             "TrainerConfig": self.Trainer.__dict__,
             "LoggingConfig": self.Logging.__dict__,
+            "InferenceConfig": self.Inference.__dict__,
         }
 
 

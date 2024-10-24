@@ -10,6 +10,7 @@ dependencies:
   - pytorch-lightning == 2.4.0
   - lightning == 2.4.0
   - lightning-utilities == 0.11.7
+  - faiss-cpu=1.9.0
   - pip
   - pip:
     - peft

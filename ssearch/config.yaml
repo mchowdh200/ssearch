@@ -21,3 +21,17 @@ LoggingConfig:
     PROJECT: "seq-similarity"
     PROGRESS_BAR: False
     CHECKPOINT_DIR: "CHECKPOINTS-IA3"
+
+InferenceConfig:
+    BASE_MODEL: "InstaDeepAI/nucleotide-transformer-v2-50m-multi-species"
+    ADAPER_CHECKPOINT: "TODO"
+    OUTPUT_DIR: "TODO"
+    BATCH_SIZE: 256 # per gpu
+    NUM_WORKERS_PER_GPU: 8
+    NUM_GPUS: 4
+    USE_AMP: True
+    METAGENOMIC_DATA:
+        - "/scratch/Shares/layer/projects/sequence_similarity_search/SRR12432009/BetaCoV_bat_Yunnan_RmYN02_2019_1.fq.gz"
+        - "/scratch/Shares/layer/projects/sequence_similarity_search/SRR12432009/BetaCoV_bat_Yunnan_RmYN02_2019_2.fq.gz"
+
+
