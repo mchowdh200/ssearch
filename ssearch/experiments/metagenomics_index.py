@@ -33,7 +33,7 @@ def parse_args():
         default=DefaultConfig.Inference.METAGENOMIC_INDEX_DATA,
         help="Paths to fastq files to index.",
     )
-    build_parser.set_defaults(func=build_index)
+    build_parser.set_defaults(func=build_metagenomics_index)
     # TODO add more options about the index type, etc.
 
     ## search index args -------------------------------------------------------
@@ -113,7 +113,7 @@ def build_metagenomics_index(
 
     build_index(
         model_factory=TransformerEncoder,
-        model_args={"base_model": base_model, "adapter_checkpoint": adapter_checkpoint},
+        model_args={"model_version": base_model, "checkpoint": adapter_checkpoint},
         index_factory=faiss.IndexFlatL2,
         index_args={"d": 512},
         output_dir=output_dir,
@@ -131,4 +131,9 @@ def build_metagenomics_index(
 
 if __name__ == "__main__":
     args = parse_args()
-    args.func(**vars(args))
+
+    func = args.func
+    kwargs = vars(args)
+    del kwargs["func"]
+
+    func(**kwargs)

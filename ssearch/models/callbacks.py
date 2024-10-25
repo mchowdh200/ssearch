@@ -61,7 +61,7 @@ class PEFTAdapterCheckpoint(ModelCheckpoint):
         for name in self.module_name:
             module = getattr(module, name)
 
-        if not isinstance(module, BaseTuner):
+        if not hasattr(module, "peft_config"):
             raise ValueError("Could not find PEFT adapter module in provided module.")
         return module
 

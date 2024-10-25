@@ -4,7 +4,7 @@ from os.path import exists
 import pandas as pd
 import pyfastx
 import torch
-from torch.utils.data import Dataset
+from torch.utils.data import Dataset, get_worker_info
 from transformers import AutoTokenizer
 
 
@@ -90,16 +90,11 @@ class FastqDataset(LenDataset):
     def __init__(
         self,
         filename: str,
-        # base_model: str,
-        # upper_case: bool,
         remake_index=False,
     ):
         self.filename = filename
         if not exists(filename + ".fxi") or remake_index:
             self.make_index()
-
-        self.tokenizer = get_tokenizer(base_model)
-        self.upper_case = upper_case
 
     def make_index(self):
         """build the index before initializing workers."""

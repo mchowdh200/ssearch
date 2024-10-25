@@ -9,7 +9,9 @@
 #SBATCH --output=metagenomic-index.out
 #SBATCH --error=metagenomic-index.err
 
-python ssearch/experiments/metagenomics_index.py
+set -e
+
+python ssearch/experiments/metagenomics_index.py build-index
 
 # OUTPUT_DIR: "/cache/much8161-results"
 mv /cache/much8161-results /scratch/Shares/layer/projects/sequence_similarity_search/experiments/metagenomic/index

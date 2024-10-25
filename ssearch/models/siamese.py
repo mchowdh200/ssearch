@@ -65,22 +65,17 @@ class SiameseModule(L.LightningModule):
         )
         u = self.model(A, attention_mask=A_mask)
         v = self.model(B, attention_mask=B_mask)
-        with torch.no_grad():
-            pred = torch.cosine_similarity(u, v)
-            mse = torch.nn.functional.mse_loss(pred, sim)
         loss = constrastive_loss(u, v, sim, self.similarity_threshold)
-        return loss, mse
+        return loss
 
     def training_step(self, batch, _):
-        loss, mse = self.forward(batch)
+        loss = self.forward(batch)
         self.log("train_loss", loss)
-        self.log("train_mse", mse)
         return loss
 
     def validation_step(self, batch, _):
-        loss, mse = self.forward(batch)
+        loss  = self.forward(batch)
         self.log("val_loss", loss, on_epoch=True, sync_dist=True)
-        self.log("val_mse", mse, on_epoch=True, sync_dist=True)
         return loss
 
     def configure_optimizers(self):

@@ -65,7 +65,7 @@ def main():
             filename="{epoch}-{val_loss:.4f}",
             save_top_k=1,
             mode="min",
-            module_name="model.model"
+            module_name="model.model" # don't judge me...
         ),
         EarlyStopping(
             monitor="val_loss",
