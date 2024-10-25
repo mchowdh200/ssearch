@@ -11,7 +11,8 @@ from ssearch.data_utils.datasets import LenDataset
 from ssearch.inference.distributed_inference import DistributedInference
 
 
-def main(
+## TODO make a bit more general
+def build_index(
     model_factory: Callable[..., torch.nn.Module],
     model_args: dict,
     index_factory: Callable[..., faiss.Index],

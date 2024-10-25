@@ -50,7 +50,8 @@ class InferenceConfig:
     NUM_WORKERS_PER_GPU: int
     NUM_GPUS: int
     USE_AMP: bool
-    METAGENOMIC_DATA: str
+    METAGENOMIC_INDEX_DATA: list[str]
+    METAGENOMIC_QUERY_DATA: list[str] # TODO
 
 
 @dataclass(kw_only=True)

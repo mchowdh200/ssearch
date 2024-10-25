@@ -90,8 +90,8 @@ class FastqDataset(LenDataset):
     def __init__(
         self,
         filename: str,
-        base_model: str,
-        upper_case: bool,
+        # base_model: str,
+        # upper_case: bool,
         remake_index=False,
     ):
         self.filename = filename
@@ -105,9 +105,10 @@ class FastqDataset(LenDataset):
         """build the index before initializing workers."""
         pyfastx.Fastq(self.filename, build_index=True)
 
-    def tokenize_batch(self, batch):
-        return self.tokenizer.batch_encode_plus(
-            [b.upper() for b in batch] if self.upper_case else batch,
+    @staticmethod
+    def tokenize_batch(batch, tokenizer, upper_case):
+        return tokenizer.batch_encode_plus(
+            [b.upper() for b in batch] if upper_case else batch,
             return_tensors="pt",
             padding="longest",
         )["input_ids"]
@@ -119,14 +120,15 @@ class FastqDataset(LenDataset):
     def __getitem__(self, idx):
         return self.fastq[idx]
 
-    def basic_collate_fn(self, batch):
+    @staticmethod
+    def basic_collate_fn(batch, tokenizer, upper_case):
         """
         Collate function that returns tokenized sequences and attention masks
         """
-        input_ids = self.tokenize_batch([x.seq for x in batch])
-        attention_mask = torch.where(
-            input_ids != self.tokenizer.pad_token_id, True, False
+        input_ids = FastqDataset.tokenize_batch(
+            [x.seq for x in batch], tokenizer, upper_case
         )
+        attention_mask = torch.where(input_ids != tokenizer.pad_token_id, True, False)
         return {
             "input_ids": input_ids,
             "attention_mask": attention_mask,
