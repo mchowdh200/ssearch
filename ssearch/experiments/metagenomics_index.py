@@ -95,6 +95,12 @@ def parse_args():
     return parser.parse_args()
 
 
+def flat_l2_index(d: int):
+    """
+    Why? because faiss is a SWIG wrapper around C++ code, and it doesn't accept kwargs...
+    """
+    return faiss.IndexFlatL2(d)
+
 def build_metagenomics_index(
     fastqs: list[str],
     output_dir: str,
@@ -114,7 +120,7 @@ def build_metagenomics_index(
     build_index(
         model_factory=TransformerEncoder,
         model_args={"model_version": base_model, "checkpoint": adapter_checkpoint},
-        index_factory=faiss.IndexFlatL2,
+        index_factory=flat_l2_index,
         index_args={"d": 512},
         output_dir=output_dir,
         batch_size_per_gpu=batch_size,
