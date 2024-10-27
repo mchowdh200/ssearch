@@ -118,6 +118,7 @@ def build_metagenomics_index(
         index_args={"d": 512},
         output_dir=output_dir,
         batch_size_per_gpu=batch_size,
+        output_shape=(512,),
         num_workers_per_gpu=num_workers_per_gpu,
         num_gpus=num_gpus,
         use_amp=use_amp,

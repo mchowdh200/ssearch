@@ -19,6 +19,7 @@ def build_index(
     index_args: dict,
     output_dir: str,
     batch_size_per_gpu: int,
+    output_shape: tuple,
     num_workers_per_gpu: int,
     num_gpus: int,
     use_amp: bool,
@@ -41,8 +42,9 @@ def build_index(
             model_factory=model_factory,
             model_args=model_args,
             dataset=dataset,
-            output_path=Path(f"{output_dir}/dataset_{i}.mmap"),
+            output_path=Path(f"{output_dir}/dataset_{i}.npy"),
             batch_size=batch_size_per_gpu,
+            output_shape=output_shape,
             dataloader_num_workers=num_workers_per_gpu,
             dataloader_worker_init_fn=worker_init_fn,
             dataloader_collate_fn=collate_fn,
@@ -52,9 +54,8 @@ def build_index(
 
     index = index_factory(**index_args)
 
-    # load mmaps (not all at once)
     mmaps = [
-        np.memmap(f"{output_dir}/dataset_{i}.mmap", dtype=np.float32, mode="r")
+        np.load(f"{output_dir}/dataset_{i}.npy", mmap_mode="r")
         for i in range(len(datasets))
     ]
 

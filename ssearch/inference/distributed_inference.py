@@ -2,18 +2,79 @@ import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Callable, Optional
+from typing import Any, Callable, Iterator, Optional, TypeVar
 
 import numpy as np
 import torch
 import torch.distributed as dist
 import torch.multiprocessing as mp
+from numpy.lib.format import open_memmap
 from numpy.typing import DTypeLike
 from torch.amp import autocast
-from torch.utils.data import DataLoader, default_collate
-from torch.utils.data.distributed import DistributedSampler
+from torch.utils.data import DataLoader, Sampler, default_collate
 
 from ssearch.data_utils.datasets import LenDataset
+
+T_co = TypeVar("T_co", covariant=True)
+
+
+class DistributedInferenceSampler(Sampler[T_co]):
+    """
+    Distributed sampler geared towards inference. Modified to not drop
+    or pad data in the event of uneven batches across replicas.
+    """
+
+    def __init__(
+        self,
+        dataset: LenDataset,
+        num_replicas: Optional[int] = None,
+        rank: Optional[int] = None,
+    ) -> None:
+        if num_replicas is None:
+            if not dist.is_available():
+                raise RuntimeError("Requires distributed package to be available")
+            num_replicas = dist.get_world_size()
+        if rank is None:
+            if not dist.is_available():
+                raise RuntimeError("Requires distributed package to be available")
+            rank = dist.get_rank()
+        if rank >= num_replicas or rank < 0:
+            raise ValueError(
+                f"Invalid rank {rank}, rank should be in the interval [0, {num_replicas - 1}]"
+            )
+        self.dataset = dataset
+        self.num_replicas = num_replicas
+        self.rank = rank
+        self.epoch = 0
+        self.num_samples = len(self.dataset) // self.num_replicas
+        if rank < len(self.dataset) % self.num_replicas:
+            self.num_samples += 1
+        self.total_size = self.num_samples * self.num_replicas
+
+    def __iter__(self) -> Iterator[T_co]:
+        indices = list(range(len(self.dataset)))
+
+        # subsample
+        indices = indices[self.rank : self.total_size : self.num_replicas]
+        assert len(indices) == self.num_samples
+
+        return iter(indices)
+
+    def __len__(self) -> int:
+        return self.num_samples
+
+    def set_epoch(self, epoch: int) -> None:
+        r"""
+        Set the epoch for this sampler.
+
+        When :attr:`shuffle=True`, this ensures all replicas
+        use a different random ordering for each epoch. Otherwise, the next iteration of this
+        sampler will yield the same ordering.
+
+        Args:
+            epoch (int): Epoch number.
+        """
+        self.epoch = epoch
 
 
 def setup_process(rank: int, world_size: int):
@@ -60,8 +121,8 @@ class DistributedInference:
 
         # Set up distributed sampler and dataloader
         print(f"Rank {rank} initializing dataloader", file=sys.stderr)
-        sampler = DistributedSampler(
-            self.dataset, num_replicas=world_size, rank=rank, shuffle=False
+        sampler = DistributedInferenceSampler(
+            self.dataset, num_replicas=world_size, rank=rank
         )
 
         dataloader = DataLoader(
@@ -76,10 +137,7 @@ class DistributedInference:
 
         ## setup mmap ---------------------------------------------------------
         print(f"Rank {rank} initializing memmap", file=sys.stderr)
-        total_samples = len(self.dataset)
-        samples_per_worker = total_samples // world_size
-        if rank < total_samples % world_size:
-            samples_per_worker += 1
+        samples_per_worker = sampler.num_samples
 
         mmap_shape = (
             (samples_per_worker,) + self.output_shape
@@ -90,7 +148,8 @@ class DistributedInference:
             self.output_path.parent
             / f"{self.output_path.stem}_rank{rank}{self.output_path.suffix}"
         )
-        mmap = np.memmap(mmap_path, dtype=self.dtype, mode="w+", shape=mmap_shape)
+        # mmap = np.memmap(mmap_path, dtype=self.dtype, mode="w+", shape=mmap_shape)
+        mmap = open_memmap(mmap_path, dtype=self.dtype, mode="w+", shape=mmap_shape)
 
         ## Run inference ------------------------------------------------------
         print(f"Rank {rank} starting inference", file=sys.stderr)
@@ -110,13 +169,17 @@ class DistributedInference:
 
                 if self.use_amp:
                     with autocast(device_type="cuda", dtype=self.amp_dtype):
-                        outputs = model(inputs)
+                        if isinstance(inputs, dict):
+                            outputs = model(**inputs)
+                        else:
+                            outputs = model(inputs)
                 else:
                     if isinstance(inputs, dict):
                         outputs = model(**inputs)
                     else:
                         outputs = model(inputs)
 
+                # TODO if batch size is not constant, need to handle this
                 batch_outputs = outputs.cpu().numpy()
                 batch_size = batch_outputs.shape[0]
                 mmap[start_idx : start_idx + batch_size] = batch_outputs
@@ -132,7 +195,6 @@ class DistributedInference:
                         torch.cuda.empty_cache()
 
         mmap.flush()
-        del mmap
         dist.barrier()
         dist.destroy_process_group()
 
@@ -155,7 +217,8 @@ class DistributedInference:
                 self.output_path.parent
                 / f"{self.output_path.stem}_rank{rank}{self.output_path.suffix}"
             )
-            mmap = np.memmap(mmap_path, dtype=self.dtype, mode="r")
+            # mmap = np.memmap(mmap_path, dtype=self.dtype, mode="r")
+            mmap = np.load(mmap_path, mmap_mode="r")
             all_outputs.append(mmap)
 
         # Create final combined memmap
@@ -165,20 +228,22 @@ class DistributedInference:
             if self.output_shape
             else (total_samples,)
         )
-        final_mmap = np.memmap(
+        final_mmap = open_memmap(
             self.output_path, dtype=self.dtype, mode="w+", shape=final_shape
         )
 
         # Copy data from worker memmaps to final memmap
         start_idx = 0
         for output in all_outputs:
+            # for i in range(0, output.shape[0], self.batch_size * 4):
+            #     j = min(i + self.batch_size * 4, output.shape[0])
+            #     final_mmap[start_idx + i : start_idx + j] = output[i:j]
             size = output.shape[0]
             final_mmap[start_idx : start_idx + size] = output
             start_idx += size
 
         # Cleanup temporary files
         final_mmap.flush()
-        del final_mmap
         for rank in range(world_size):
             mmap_path = (
                 self.output_path.parent
