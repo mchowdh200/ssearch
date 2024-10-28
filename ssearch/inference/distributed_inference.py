@@ -92,16 +92,27 @@ def setup_process(rank: int, world_size: int):
 
 @dataclass(kw_only=True)
 class DistributedInference:
+    # model args
     model_factory: Callable[..., torch.nn.Module]
     model_args: dict
+
+    # dataset args
     dataset: LenDataset
     output_path: Path
     batch_size: int
+
+    # dataloader args
     dataloader_num_workers: int
     dataloader_worker_init_fn: Optional[Callable[[Any], None]] = None
     dataloader_collate_fn: Callable[[Any], Any] = default_collate
+    model_input_keys: Optional[list[str]] = None  # for dict inputs
+    metadata_write_fn: Optional[Callable[..., None]] = None
+
+    # memmap args
     output_shape: Optional[tuple] = None
     dtype: DTypeLike = np.float32
+    
+    # inference args
     num_gpus: int = 1
     use_amp: bool = True
     amp_dtype: torch.dtype = torch.float16
@@ -158,12 +169,21 @@ class DistributedInference:
         with torch.no_grad():
             start_idx = 0
             for batch in dataloader:
+                if self.metadata_write_fn:
+                    self.metadata_write_fn(batch, output_path=f"{mmap_path}.metadata")
                 if isinstance(batch, (tuple, list)):
                     inputs = batch[0].to(rank, non_blocking=True)
                 elif isinstance(batch, dict):
-                    inputs = {
-                        k: v.to(rank, non_blocking=True) for k, v in batch.items()
-                    }
+                    if self.model_input_keys:
+                        inputs = {
+                            k: v.to(rank, non_blocking=True)
+                            for k, v in batch.items()
+                            if k in self.model_input_keys
+                        }
+                    else:
+                        inputs = {
+                            k: v.to(rank, non_blocking=True) for k, v in batch.items()
+                        }
                 else:
                     inputs = batch.to(rank, non_blocking=True)
 

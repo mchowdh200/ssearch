@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 from os.path import exists
+from pathlib import Path
 
 import pandas as pd
 import pyfastx
@@ -147,3 +148,87 @@ class FastqDataset(LenDataset):
         dataset = worker_info.dataset
         fastq = pyfastx.Fastq(dataset.filename)
         dataset.fastq = fastq
+
+
+class SlidingWindowFasta(LenDataset):
+    """
+    Given a fasta with a single sequence, generate sliding windows
+    of a fixed size and stride.  Additionally provide the start/end
+    positions of the windows.
+    """
+
+    def __init__(self, filename: list[str], window_size: int, stride: int):
+        fasta_paths = [Path(filename) for filename in filename]
+        fastas = [pyfastx.Fasta(filename) for filename in fasta_paths]
+        sample_names = [path.stem for path in fasta_paths]
+        sequences = [fasta[0].seq.upper() for fasta in fastas]
+
+        # combine all windowed sequences, positions, and sample names into flat lists
+        # maintaining the order of the sequences, positions, and sample names.
+        self.windowed_sequences, self.positions, self.sample_names = (
+            self.sliding_windows(sequences, window_size, stride, sample_names)
+        )
+
+    def sliding_windows(
+        self,
+        sequences: list[str],
+        window_size: int,
+        stride: int,
+        sample_names: list[str],
+    ):
+        windowed_seqs = [
+            x
+            for seq in sequences
+            for x in [
+                seq[i : i + window_size]
+                for i in range(0, len(seq) - window_size + 1, stride)
+            ]
+        ]
+        positions = [
+            x
+            for seq in sequences
+            for x in [
+                (i, i + window_size - 1)
+                for i in range(0, len(seq) - window_size + 1, stride)
+            ]
+        ]
+        samples = [
+            x
+            for sample_name, sequence in zip(sample_names, sequences)
+            for x in [
+                sample_name for _ in range(0, len(sequence) - window_size + 1, stride)
+            ]
+        ]
+        return windowed_seqs, positions, samples
+
+    @staticmethod
+    def tokenize_batch(batch, tokenizer):
+        return tokenizer.batch_encode_plus(
+            batch,
+            return_tensors="pt",
+            padding="longest",
+        )["input_ids"]
+
+    def __len__(self):
+        return len(self.windowed_sequences)
+
+    def __getitem__(self, idx):
+        return {
+            "seq": self.windowed_sequences[idx],
+            "pos": self.positions[idx],
+            "sample": self.sample_names[idx],
+        }
+
+    @staticmethod
+    def collate_fn(batch, tokenizer):
+        seq = SlidingWindowFasta.tokenize_batch([x["seq"] for x in batch], tokenizer)
+        attention_mask = torch.where(seq != tokenizer.pad_token_id, True, False)
+        pos = [x["pos"] for x in batch]
+        sample = [x["sample"] for x in batch]
+
+        return {
+            "seq": seq,
+            "pos": pos,
+            "sample": sample,
+            "attention_mask": attention_mask,
+        }
