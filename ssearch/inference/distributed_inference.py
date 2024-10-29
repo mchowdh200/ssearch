@@ -1,4 +1,5 @@
 import os
+import shutil
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -111,7 +112,7 @@ class DistributedInference:
     # memmap args
     output_shape: Optional[tuple] = None
     dtype: DTypeLike = np.float32
-    
+
     # inference args
     num_gpus: int = 1
     use_amp: bool = True
@@ -159,7 +160,6 @@ class DistributedInference:
             self.output_path.parent
             / f"{self.output_path.stem}_rank{rank}{self.output_path.suffix}"
         )
-        # mmap = np.memmap(mmap_path, dtype=self.dtype, mode="w+", shape=mmap_shape)
         mmap = open_memmap(mmap_path, dtype=self.dtype, mode="w+", shape=mmap_shape)
 
         ## Run inference ------------------------------------------------------
@@ -255,12 +255,24 @@ class DistributedInference:
         # Copy data from worker memmaps to final memmap
         start_idx = 0
         for output in all_outputs:
-            # for i in range(0, output.shape[0], self.batch_size * 4):
-            #     j = min(i + self.batch_size * 4, output.shape[0])
-            #     final_mmap[start_idx + i : start_idx + j] = output[i:j]
             size = output.shape[0]
             final_mmap[start_idx : start_idx + size] = output
             start_idx += size
+
+        # merge the metadata files (if they exist)
+        # we assume they are simple text files with newline at end,
+        # and will merge them by appending them in the order of the ranks
+        if self.metadata_write_fn:
+            files = " ".join(
+                [
+                    f"{self.output_path.parent}/{self.output_path.stem}_rank{rank}{self.output_path.suffix}.metadata"
+                    for rank in range(world_size)
+                ]
+            )
+            os.system(
+                f"cat {files} > {self.output_path.parent}/{self.output_path.stem}.metadata"
+            )
+            os.system(f"rm {files}")
 
         # Cleanup temporary files
         final_mmap.flush()

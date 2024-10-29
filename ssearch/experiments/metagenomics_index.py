@@ -9,13 +9,23 @@ import faiss
 from transformers import AutoTokenizer
 
 from ssearch.config import DefaultConfig
-from ssearch.data_utils.datasets import FastqDataset, LenDataset
+from ssearch.data_utils.datasets import (FastqDataset, LenDataset,
+                                         SlidingWindowFasta)
 from ssearch.inference.build_index import build_index
+from ssearch.inference.query_index import query_index
 from ssearch.models.transformer_encoder import TransformerEncoder
 
 
 def not_implemented(**kwargs):
     raise NotImplementedError("TODO")
+
+
+def write_sample_pos(batch: dict, output_path: str | Path):
+    samples = batch["sample"]
+    positions = batch["pos"]
+    with open(output_path, "a") as f:
+        for sample, (start, end) in zip(samples, positions):
+            f.write(f"{sample}\t{start}\t{end}\n")
 
 
 def parse_args():
@@ -44,7 +54,7 @@ def parse_args():
         default=DefaultConfig.Inference.METAGENOMIC_QUERY_DATA,
         help="Path to fastq file to search against index.",
     )
-    search_parser.set_defaults(func=not_implemented)
+    search_parser.set_defaults(func=query_metagenomics_index)
 
     ## plot args ---------------------------------------------------------------
     # TODO add args
@@ -101,6 +111,7 @@ def flat_l2_index(d: int):
     """
     return faiss.IndexFlatL2(d)
 
+
 def build_metagenomics_index(
     fastqs: list[str],
     output_dir: str,
@@ -133,6 +144,39 @@ def build_metagenomics_index(
             FastqDataset.basic_collate_fn, tokenizer=tokenizer, upper_case=True
         ),
         worker_init_fn=FastqDataset.worker_init_fn,
+    )
+
+
+# TODO make some of this configurable with DefaultConfig
+def query_metagenomics_index(
+    query_fastas: list[str],
+    output_dir: str,
+    base_model: str,
+    adapter_checkpoint: str,
+    batch_size: int,
+    num_workers_per_gpu: int,
+    num_gpus: int,
+    use_amp: bool,
+):
+    dataset = SlidingWindowFasta(query_fastas, window_size=150, stride=50)
+    tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=True)
+    query_index(
+        model_factory=TransformerEncoder,
+        model_args={"model_version": base_model, "checkpoint": adapter_checkpoint},
+        index_path="TODO",
+        output_dir=output_dir,
+        batch_size_per_gpu=batch_size,
+        num_workers_per_gpu=num_workers_per_gpu,
+        num_gpus=num_gpus,
+        use_amp=use_amp,
+        datasets=[dataset],
+        collate_fn=partial(
+            SlidingWindowFasta.collate_fn,
+            tokenizer=tokenizer,
+        ),
+        model_input_keys=["input_ids", "attention_mask"],
+        metadata_write_fn=write_sample_pos,
+        k=10,
     )
 
 

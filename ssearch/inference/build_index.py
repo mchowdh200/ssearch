@@ -32,7 +32,6 @@ def build_index(
     save result mmaps to output_dir.
     """
 
-    # Create output directory if it doesn't exist
     os.makedirs(output_dir, exist_ok=True)
 
     # Run distributed inference for each dataset
