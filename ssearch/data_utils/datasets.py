@@ -1,3 +1,4 @@
+import sys
 from abc import ABC, abstractmethod
 from os.path import exists
 from pathlib import Path
@@ -157,17 +158,40 @@ class SlidingWindowFasta(LenDataset):
     positions of the windows.
     """
 
-    def __init__(self, filename: list[str], window_size: int, stride: int):
-        fasta_paths = [Path(filename) for filename in filename]
-        fastas = [pyfastx.Fasta(filename) for filename in fasta_paths]
-        sample_names = [path.stem for path in fasta_paths]
-        sequences = [fasta[0].seq.upper() for fasta in fastas]
+    def __init__(self, filenames: list[str], window_size: int, stride: int):
+        print("SLIDING WINDOW FASTA INITIALIZING...", file=sys.stderr)
+        self.fasta_paths = [Path(filename) for filename in filenames]
+        print(self.fasta_paths, file=sys.stderr)
+
+        # TODO do with pyfastx just as with FastqDataset
+        sequences, sample_names = self.get_sequences() 
+        print("FASTAS LOADED...", file=sys.stderr)
 
         # combine all windowed sequences, positions, and sample names into flat lists
         # maintaining the order of the sequences, positions, and sample names.
         self.windowed_sequences, self.positions, self.sample_names = (
             self.sliding_windows(sequences, window_size, stride, sample_names)
         )
+        print("SLIDING WINDOWS GENERATED...", file=sys.stderr)
+
+    def get_sequences(self):
+        """
+        I'm just gonna load the whole fasta into memory.
+        Assume only one sequence per fasta.
+        """
+        sequences = []
+        sample_names = []
+        for fasta in self.fasta_paths:
+            with open(fasta, 'r') as f:
+                sample_names.append(fasta.stem)
+                seq = []
+                for line in f:
+                    if line.startswith(">"):
+                        continue
+                    seq.append(line.strip().upper())
+                sequences.append("".join(seq))
+        return sequences, sample_names
+
 
     def sliding_windows(
         self,
