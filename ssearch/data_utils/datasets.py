@@ -251,7 +251,7 @@ class SlidingWindowFasta(LenDataset):
         sample = [x["sample"] for x in batch]
 
         return {
-            "seq": seq,
+            "input_ids": seq,
             "pos": pos,
             "sample": sample,
             "attention_mask": attention_mask,

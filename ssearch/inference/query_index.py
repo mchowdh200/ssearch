@@ -5,10 +5,10 @@ from typing import Any, Callable, Optional
 import faiss
 import numpy as np
 import torch
+from numpy.lib.format import open_memmap
 
 from ssearch.data_utils.datasets import LenDataset
 from ssearch.inference.distributed_inference import DistributedInference
-from numpy.lib.format import open_memmap
 
 
 def query_index(
@@ -18,6 +18,7 @@ def query_index(
     output_dir: str,
     batch_size_per_gpu: int,
     num_workers_per_gpu: int,
+    output_shape: tuple[int],
     num_gpus: int,
     use_amp: bool,
     datasets: list[LenDataset],
@@ -36,6 +37,7 @@ def query_index(
             dataset=dataset,
             output_path=Path(f"{output_dir}/query_dataset_{i}.npy"),
             batch_size=batch_size_per_gpu,
+            output_shape=output_shape,
             dataloader_num_workers=num_workers_per_gpu,
             dataloader_worker_init_fn=worker_init_fn,
             dataloader_collate_fn=collate_fn,
@@ -47,7 +49,7 @@ def query_index(
 
     index = faiss.read_index(index_path)
     mmaps = [
-        np.load(f"{output_dir}/query_embeddings_{i}.npy", mmap_mode="r")
+        np.load(f"{output_dir}/query_dataset_{i}.npy", mmap_mode="r")
         for i in range(len(datasets))
     ]
 
@@ -62,7 +64,7 @@ def query_index(
         mode="w+",
         shape=(sum(len(dataset) for dataset in datasets), k),
         dtype=np.int64,
-    ) 
+    )
 
     for mmap in mmaps:
         for i in range(0, len(mmap), batch_size_per_gpu):
@@ -72,4 +74,3 @@ def query_index(
 
     D_out.flush()
     I_out.flush()
-

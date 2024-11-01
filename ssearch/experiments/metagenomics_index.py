@@ -6,6 +6,10 @@ from pathlib import Path
 from typing import Any, Callable, Optional
 
 import faiss
+import matplotlib.pyplot as plt
+import numpy as np
+import pandas as pd
+from intervaltree import IntervalTree
 from transformers import AutoTokenizer
 
 from ssearch.config import DefaultConfig
@@ -57,8 +61,19 @@ def parse_args():
     search_parser.set_defaults(func=query_metagenomics_index)
 
     ## plot args ---------------------------------------------------------------
-    # TODO add args
-    plot_parser.set_defaults(func=not_implemented)
+    plot_parser.add_argument(
+        "--metadata-path",
+        type=str,
+        default=DefaultConfig.Inference.METADATA_PATH,
+        help="Path to metadata file.",
+    )
+    plot_parser.add_argument(
+        "--distances-path",
+        type=str,
+        default=DefaultConfig.Inference.DISTANCES_PATH,
+        help="Path to distances file.",
+    )
+    plot_parser.set_defaults(func=plot)
 
     ## common args -------------------------------------------------------------
     for name, subp in subparsers.choices.items():
@@ -163,9 +178,10 @@ def query_metagenomics_index(
     query_index(
         model_factory=TransformerEncoder,
         model_args={"model_version": base_model, "checkpoint": adapter_checkpoint},
-        index_path="TODO",
+        index_path="/cache/much8161-results/index.faiss",
         output_dir=output_dir,
         batch_size_per_gpu=batch_size,
+        output_shape=(512,),
         num_workers_per_gpu=num_workers_per_gpu,
         num_gpus=num_gpus,
         use_amp=use_amp,
@@ -178,6 +194,85 @@ def query_metagenomics_index(
         metadata_write_fn=write_sample_pos,
         k=10,
     )
+
+
+## ---------------------------------------------------------------------------
+## Plotting functions
+## ---------------------------------------------------------------------------
+def df2intervaltrees(df: pd.DataFrame) -> dict[str, IntervalTree]:
+    """
+    Given a dataframe with columns: sample, start, end, distance, return a dictionary
+    of IntervalTrees keyed by sample.
+    """
+    trees = {}
+    for sample, start, end, distance in df.itertuples(index=False):
+        if sample not in trees:
+            trees[sample] = IntervalTree()
+        trees[sample].addi(start, end, distance)
+    return trees
+
+
+def make_bins(start, end, step) -> IntervalTree:
+    """
+    Make an interval tree containing intervals of size step from start to end
+    """
+    interval_bins = IntervalTree()
+    for i in range(start, end, step):
+        interval_bins.addi(i, i + step, [])
+    return interval_bins
+
+
+def smooth_data(x, window_size):
+    """
+    Smooth the data using a moving average filter
+    """
+    return np.convolve(
+        x,
+        np.ones((window_size,)) / window_size,
+        mode="same",
+    )
+
+
+def plot(metadata_path: str, distances_path: str, output_dir: str):
+    """
+    Metadata is a bed like file that denotes virus name, and start/end positions
+    in their genomes. Distances is a numpy array of shape (num_queries, k) where
+    k is the number of nearest neighbors.
+    """
+    os.makedirs(output_dir, exist_ok=True)
+    labels = []
+    metadata = pd.read_csv(
+        metadata_path,
+        sep="\t",
+        names=["sample", "start", "end"],
+    )
+    distances = np.load(distances_path)
+    metadata["mean_distance"] = distances[:, 0] # .mean(axis=1)
+
+    # load each sample's set of scores keyed by interval
+    # into a dictionary keyed by sample
+    plt.figure(figsize=(10, 5))
+    trees = df2intervaltrees(metadata)
+    for sample, tree in trees.items():
+        interval_bins = make_bins(-0, 30_100, 10)
+        for i in tree:
+            ovlps = interval_bins.overlap(i)
+            for o in ovlps:
+                o.data.append(i.data)
+        bins = sorted(
+            [(i.begin, i.end, np.mean(i.data)) for i in interval_bins if i.data]
+        )
+        labels.append(f"{sample}")
+        plt.plot(
+            [x[0] for x in bins],
+            smooth_data([-x[2] for x in bins], window_size=25),
+            label=f"{sample}",
+            linewidth=0.9,
+        )
+    plt.legend(labels, loc="best", ncol=2)
+    plt.xlabel("Genome Position")
+    plt.ylabel("Mean Distance")
+    plt.savefig(f"{output_dir}/metagenomics-experiment.png", dpi=600)
 
 
 if __name__ == "__main__":
