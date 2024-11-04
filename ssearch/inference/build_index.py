@@ -51,19 +51,23 @@ def build_index(
             use_amp=use_amp,
         ).run()
 
+    print("Initializing index", file=sys.stderr)
     index = index_factory(**index_args)
 
+    print("Loading mmaps", file=sys.stderr)
     mmaps = [
         np.load(f"{output_dir}/dataset_{i}.npy", mmap_mode="r")
         for i in range(len(datasets))
     ]
 
     # TODO make config param
+    print("Building index", file=sys.stderr)
     index_batch_size = 256
     for mmap in mmaps:
         for i in range(0, len(mmap), index_batch_size):
             index.add(mmap[i : i + index_batch_size])
 
+    print("Saving index", file=sys.stderr)
     faiss.write_index(index, f"{output_dir}/index.faiss")
 
 

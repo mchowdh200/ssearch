@@ -46,8 +46,8 @@ InferenceConfig:
         - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/RaTG13.fasta" 
         - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV04.fasta"
         - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV07.fasta"
-    METADATA_PATH: "/scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/much8161-results/query_dataset_0.metadata" 
-    DISTANCES_PATH: "/scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/much8161-results/query_results_D.npy"
+    METADATA_PATH: "/scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/query_dataset_0.metadata" 
+    DISTANCES_PATH: "/scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/query_results_D.npy"
 
 
 

@@ -126,6 +126,9 @@ def flat_l2_index(d: int):
     """
     return faiss.IndexFlatL2(d)
 
+def flat_ip_index(d: int):
+    return faiss.IndexFlatIP(d)
+
 
 def build_metagenomics_index(
     fastqs: list[str],
@@ -217,7 +220,7 @@ def make_bins(start, end, step) -> IntervalTree:
     Make an interval tree containing intervals of size step from start to end
     """
     interval_bins = IntervalTree()
-    for i in range(start, end, step):
+    for i in range(start, end+1, step):
         interval_bins.addi(i, i + step, [])
     return interval_bins
 
@@ -247,14 +250,16 @@ def plot(metadata_path: str, distances_path: str, output_dir: str):
         names=["sample", "start", "end"],
     )
     distances = np.load(distances_path)
-    metadata["mean_distance"] = distances[:, 0] # .mean(axis=1)
+    metadata["mean_distance"] = distances[:, 0]#.mean(axis=1)
 
     # load each sample's set of scores keyed by interval
     # into a dictionary keyed by sample
     plt.figure(figsize=(10, 5))
     trees = df2intervaltrees(metadata)
-    for sample, tree in trees.items():
-        interval_bins = make_bins(-0, 30_100, 10)
+    samples = sorted(trees.keys())
+    for sample in samples:
+        tree = trees[sample]
+        interval_bins = make_bins(0, tree.end(), 10)
         for i in tree:
             ovlps = interval_bins.overlap(i)
             for o in ovlps:
@@ -266,13 +271,16 @@ def plot(metadata_path: str, distances_path: str, output_dir: str):
         plt.plot(
             [x[0] for x in bins],
             smooth_data([-x[2] for x in bins], window_size=25),
+            # [-x[2] for x in bins],
             label=f"{sample}",
-            linewidth=0.9,
+            linewidth=1.0,
+            # where="post",
         )
     plt.legend(labels, loc="best", ncol=2)
     plt.xlabel("Genome Position")
     plt.ylabel("Mean Distance")
     plt.savefig(f"{output_dir}/metagenomics-experiment.png", dpi=600)
+    plt.xlim(0, 30_000)
 
 
 if __name__ == "__main__":
