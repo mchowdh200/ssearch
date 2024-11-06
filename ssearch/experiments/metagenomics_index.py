@@ -18,6 +18,7 @@ from ssearch.data_utils.datasets import (FastqDataset, LenDataset,
 from ssearch.inference.build_index import build_index
 from ssearch.inference.query_index import query_index
 from ssearch.models.transformer_encoder import TransformerEncoder
+from scipy.signal import savgol_filter
 
 
 def not_implemented(**kwargs):
@@ -225,16 +226,11 @@ def make_bins(start, end, step) -> IntervalTree:
     return interval_bins
 
 
-def smooth_data(x, window_size):
+def smooth_data(x, window_size=25):
     """
-    Smooth the data using a moving average filter
+    Smooth the data using a gaussian kernel.
     """
-    return np.convolve(
-        x,
-        np.ones((window_size,)) / window_size,
-        mode="same",
-    )
-
+    return savgol_filter(x, window_size, 3)
 
 def plot(metadata_path: str, distances_path: str, output_dir: str):
     """
@@ -257,9 +253,10 @@ def plot(metadata_path: str, distances_path: str, output_dir: str):
     plt.figure(figsize=(10, 5))
     trees = df2intervaltrees(metadata)
     samples = sorted(trees.keys())
+    data = {}
     for sample in samples:
         tree = trees[sample]
-        interval_bins = make_bins(0, tree.end(), 10)
+        interval_bins = make_bins(0, tree.end(), 50)
         for i in tree:
             ovlps = interval_bins.overlap(i)
             for o in ovlps:
@@ -267,18 +264,32 @@ def plot(metadata_path: str, distances_path: str, output_dir: str):
         bins = sorted(
             [(i.begin, i.end, np.mean(i.data)) for i in interval_bins if i.data]
         )
+        # labels.append(f"{sample}")
+        data[sample] = bins
+        # plt.plot(
+        #     [x[0] for x in bins],
+        #     smooth_data([-x[2] for x in bins], window_size=25),
+        #     # [-x[2] for x in bins],
+        #     label=f"{sample}",
+        #     linewidth=1.0,
+        #     # where="post",
+        # )
+
+    max_distance = max([max([abs(x[2]) for x in data[sample]]) for sample in samples])
+    for sample in samples:
+        bins = data[sample]
         labels.append(f"{sample}")
         plt.plot(
             [x[0] for x in bins],
-            smooth_data([-x[2] for x in bins], window_size=25),
-            # [-x[2] for x in bins],
+            # [1-(x[2]/max_distance) for x in bins],
+            smooth_data([1-(x[2]/max_distance) for x in bins], window_size=50),
             label=f"{sample}",
             linewidth=1.0,
-            # where="post",
         )
-    plt.legend(labels, loc="best", ncol=2)
+
+    plt.legend(labels, loc="best", ncol=4)
     plt.xlabel("Genome Position")
-    plt.ylabel("Mean Distance")
+    plt.ylabel("Similarity")
     plt.savefig(f"{output_dir}/metagenomics-experiment.png", dpi=600)
     plt.xlim(0, 30_000)
 
