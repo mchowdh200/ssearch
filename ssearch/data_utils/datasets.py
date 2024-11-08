@@ -158,13 +158,25 @@ class SlidingWindowFasta(LenDataset):
     positions of the windows.
     """
 
-    def __init__(self, filenames: list[str], window_size: int, stride: int):
+    def __init__(
+        self,
+        filenames: list[str],
+        window_size: int,
+        stride: int,
+        reverse_complement: bool = False,
+    ):
         print("SLIDING WINDOW FASTA INITIALIZING...", file=sys.stderr)
         self.fasta_paths = [Path(filename) for filename in filenames]
         print(self.fasta_paths, file=sys.stderr)
 
         # TODO do with pyfastx just as with FastqDataset
-        sequences, sample_names = self.get_sequences() 
+        sequences, sample_names = self.get_sequences()
+
+        # add reverse complements to dataset along with original sequences
+        if reverse_complement:
+            print("ADDING REVERSE COMPLEMENTS...", file=sys.stderr)
+            sequences += [self.reverse_complement(seq) for seq in sequences]
+            sample_names += sample_names
         print("FASTAS LOADED...", file=sys.stderr)
 
         # combine all windowed sequences, positions, and sample names into flat lists
@@ -174,7 +186,13 @@ class SlidingWindowFasta(LenDataset):
         )
         print("SLIDING WINDOWS GENERATED...", file=sys.stderr)
 
-    def get_sequences(self):
+    def reverse_complement(self, seq: str) -> str:
+        # TODO This is probably slow, but for small data not a big deal
+        # When I do this with pyfastx, I can just use `.antisense` on a seq
+        complement = {"A": "T", "C": "G", "G": "C", "T": "A"}
+        return "".join(complement[base] for base in reversed(seq))
+
+    def get_sequences(self) -> tuple[list[str], list[str]]:
         """
         I'm just gonna load the whole fasta into memory.
         Assume only one sequence per fasta.
@@ -182,7 +200,7 @@ class SlidingWindowFasta(LenDataset):
         sequences = []
         sample_names = []
         for fasta in self.fasta_paths:
-            with open(fasta, 'r') as f:
+            with open(fasta, "r") as f:
                 sample_names.append(fasta.stem)
                 seq = []
                 for line in f:
@@ -191,7 +209,6 @@ class SlidingWindowFasta(LenDataset):
                     seq.append(line.strip().upper())
                 sequences.append("".join(seq))
         return sequences, sample_names
-
 
     def sliding_windows(
         self,

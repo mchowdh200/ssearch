@@ -11,7 +11,6 @@ from ssearch.data_utils.datasets import LenDataset
 from ssearch.inference.distributed_inference import DistributedInference
 
 
-## TODO make a bit more general
 def build_index(
     model_factory: Callable[..., torch.nn.Module],
     model_args: dict,
@@ -26,6 +25,8 @@ def build_index(
     datasets: list[LenDataset],
     collate_fn: Callable[[Any], Any],
     worker_init_fn: Optional[Callable[[Any], None]] = None,
+    model_input_keys: Optional[list[str]] = None,
+    metadata_write_fn: Optional[Callable[..., None]] = None,
 ):
     """
     Load fine tuned model, and run distributed inference for each dataset, and
@@ -47,6 +48,8 @@ def build_index(
             dataloader_num_workers=num_workers_per_gpu,
             dataloader_worker_init_fn=worker_init_fn,
             dataloader_collate_fn=collate_fn,
+            model_input_keys=model_input_keys,
+            metadata_write_fn=metadata_write_fn,
             num_gpus=num_gpus,
             use_amp=use_amp,
         ).run()
@@ -69,5 +72,3 @@ def build_index(
 
     print("Saving index", file=sys.stderr)
     faiss.write_index(index, f"{output_dir}/index.faiss")
-
-

@@ -42,6 +42,7 @@ class LoggingConfig:
 
 
 @dataclass(kw_only=True)
+# TODO change name to MetaGenomicIndexConfig
 class InferenceConfig:
     BASE_MODEL: str
     ADAPTER_CHECKPOINT: str
@@ -50,11 +51,26 @@ class InferenceConfig:
     NUM_WORKERS_PER_GPU: int
     NUM_GPUS: int
     USE_AMP: bool
-    # TODO split this out into separate config
     METAGENOMIC_INDEX_DATA: list[str]
     METAGENOMIC_QUERY_DATA: list[str]
     METADATA_PATH: str
     DISTANCES_PATH: str
+    K: int # TODO add this to the metagenomic index args
+
+@dataclass(kw_only=True)
+class KNNReferenceConfig:
+    BASE_MODEL: str
+    ADAPTER_CHECKPOINT: str
+    OUTPUT_DIR: str
+    BATCH_SIZE: int
+    NUM_WORKERS_PER_GPU: int
+    NUM_GPUS: int
+    USE_AMP: bool
+    REFERENCE_FASTA: str
+    QUERY_FASTAS: list[str]
+    WINDOW_SIZE: int
+    STRIDE: int
+    K: int
 
 
 @dataclass(kw_only=True)
@@ -63,7 +79,8 @@ class Config:
     TrainingData: TrainingDataConfig
     Trainer: TrainerConfig
     Logging: LoggingConfig
-    Inference: InferenceConfig
+    Inference: InferenceConfig # TODO change this to split into task specific configs
+    KNNReference: KNNReferenceConfig
 
     @staticmethod
     def from_yaml(config_path: str):
@@ -75,6 +92,7 @@ class Config:
             Trainer=TrainerConfig(**config["TrainerConfig"]),
             Logging=LoggingConfig(**config["LoggingConfig"]),
             Inference=InferenceConfig(**config["InferenceConfig"]),
+            KNNReference=KNNReferenceConfig(**config["KNNReferenceConfig"]),
         )
 
     def to_dict(self):

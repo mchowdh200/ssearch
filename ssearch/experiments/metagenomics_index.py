@@ -1,9 +1,7 @@
 import argparse
 import os
-import sys
 from functools import partial
 from pathlib import Path
-from typing import Any, Callable, Optional
 
 import faiss
 import matplotlib.pyplot as plt
