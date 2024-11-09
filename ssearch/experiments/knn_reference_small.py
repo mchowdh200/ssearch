@@ -43,7 +43,7 @@ def parse_args():
         help="Input reference fasta file.",
     )
 
-    plot_parser.set_defaults(func=build_knn_ref)
+    build_parser.set_defaults(func=build_knn_ref)
 
     ## search index args ------------------------------------------------------
     search_parser.add_argument(
@@ -165,3 +165,12 @@ def build_knn_ref(
 
 def search_knn_ref():
     raise NotImplementedError()
+
+if __name__ == "__main__":
+    args = parse_args()
+
+    func = args.func
+    kwargs = vars(args)
+    del kwargs["func"]
+
+    func(**kwargs)

@@ -6,8 +6,8 @@
 #SBATCH --mem=500GB
 #SBATCH --cpus-per-task=32
 #SBATCH --nodes=1
-#SBATCH --output=fine-tuning.out
-#SBATCH --error=fine-tuning.err
+#SBATCH --output=logs/fine-tuning.out
+#SBATCH --error=logs/fine-tuning.err
 
 mkdir -p CHECKPOINTS
 ssearch train

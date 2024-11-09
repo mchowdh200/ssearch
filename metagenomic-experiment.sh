@@ -6,8 +6,8 @@
 #SBATCH --mem=500GB
 #SBATCH --cpus-per-task=32
 #SBATCH --nodes=1
-#SBATCH --output=metagenomic-index.out
-#SBATCH --error=metagenomic-index.err
+#SBATCH --output=logs/metagenomic-index.out
+#SBATCH --error=logs/metagenomic-index.err
 
 set -e
 
