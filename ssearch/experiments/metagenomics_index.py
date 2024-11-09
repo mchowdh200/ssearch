@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from intervaltree import IntervalTree
+from scipy.signal import savgol_filter
 from transformers import AutoTokenizer
 
 from ssearch.config import DefaultConfig
@@ -16,7 +17,6 @@ from ssearch.data_utils.datasets import (FastqDataset, LenDataset,
 from ssearch.inference.build_index import build_index
 from ssearch.inference.query_index import query_index
 from ssearch.models.transformer_encoder import TransformerEncoder
-from scipy.signal import savgol_filter
 
 
 def not_implemented(**kwargs):
@@ -125,6 +125,7 @@ def flat_l2_index(d: int):
     """
     return faiss.IndexFlatL2(d)
 
+
 def flat_ip_index(d: int):
     return faiss.IndexFlatIP(d)
 
@@ -163,7 +164,6 @@ def build_metagenomics_index(
         worker_init_fn=FastqDataset.worker_init_fn,
     )
 
-
 # TODO make some of this configurable with DefaultConfig
 def query_metagenomics_index(
     query_fastas: list[str],
@@ -188,10 +188,7 @@ def query_metagenomics_index(
         num_gpus=num_gpus,
         use_amp=use_amp,
         datasets=[dataset],
-        collate_fn=partial(
-            SlidingWindowFasta.collate_fn,
-            tokenizer=tokenizer,
-        ),
+        collate_fn=partial(SlidingWindowFasta.collate_fn, tokenizer=tokenizer),
         model_input_keys=["input_ids", "attention_mask"],
         metadata_write_fn=write_sample_pos,
         k=10,
@@ -219,7 +216,7 @@ def make_bins(start, end, step) -> IntervalTree:
     Make an interval tree containing intervals of size step from start to end
     """
     interval_bins = IntervalTree()
-    for i in range(start, end+1, step):
+    for i in range(start, end + 1, step):
         interval_bins.addi(i, i + step, [])
     return interval_bins
 
@@ -229,6 +226,7 @@ def smooth_data(x, window_size=25):
     Smooth the data using a gaussian kernel.
     """
     return savgol_filter(x, window_size, 3)
+
 
 def plot(metadata_path: str, distances_path: str, output_dir: str):
     """
@@ -244,7 +242,7 @@ def plot(metadata_path: str, distances_path: str, output_dir: str):
         names=["sample", "start", "end"],
     )
     distances = np.load(distances_path)
-    metadata["mean_distance"] = distances[:, 0]#.mean(axis=1)
+    metadata["mean_distance"] = distances[:, 0]  # .mean(axis=1)
 
     # load each sample's set of scores keyed by interval
     # into a dictionary keyed by sample
@@ -280,7 +278,7 @@ def plot(metadata_path: str, distances_path: str, output_dir: str):
         plt.plot(
             [x[0] for x in bins],
             # [1-(x[2]/max_distance) for x in bins],
-            smooth_data([1-(x[2]/max_distance) for x in bins], window_size=50),
+            smooth_data([1 - (x[2] / max_distance) for x in bins], window_size=50),
             label=f"{sample}",
             linewidth=1.0,
         )

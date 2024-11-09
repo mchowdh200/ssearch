@@ -147,10 +147,7 @@ def build_knn_ref(
     # Build index
     build_index(
         model_factory=TransformerEncoder,
-        model_args={
-            "model_version": base_model,
-            "adapter_checkpoint": adapter_checkpoint,
-        },
+        model_args={"model_version": base_model, "checkpoint": adapter_checkpoint},
         index_factory=flat_l2_index,
         index_args={"d": 512},
         output_dir=output_dir,
@@ -161,6 +158,7 @@ def build_knn_ref(
         use_amp=use_amp,
         datasets=[dataset],
         collate_fn=partial(SlidingWindowFasta.collate_fn, tokenizer=tokenizer),
+        model_input_keys=["input_ids", "attention_mask"],
         metadata_write_fn=write_sample_pos,
     )
 
