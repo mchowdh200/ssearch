@@ -50,4 +50,28 @@ InferenceConfig:
     DISTANCES_PATH: "/scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/query_results_D.npy"
 
 
+KNNReferenceConfig:
+  BASE_MODEL: "InstaDeepAI/nucleotide-transformer-v2-50m-multi-species"
+  ADAPTER_CHECKPOINT: "/Users/much8161/Repositories/ssearch/CHECKPOINTS-IA3/epoch=71-val_loss=0.0010/nucleotide-transformer-ia3-ssearch"
+  OUTPUT_DIR: "/cache/much8161-results"
+  BATCH_SIZE: 2048 # per gpu
+  NUM_WORKERS_PER_GPU: 8
+  NUM_GPUS: 4
+  USE_AMP: True
+  REFERENCE_FASTA: "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/RmYN02.fasta"
+  QUERY_FASTAS:
+    - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/BJ01.fasta"
+    - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV02.fasta"
+    - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV06.fasta"
+    - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/ZC45.fasta"
+    - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV05.fasta"
+    - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV1.fasta"
+    - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/RaTG13.fasta" 
+    - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV04.fasta"
+    - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV07.fasta"
+  WINDOW_SIZE: 150
+  STRIDE: 50
+  K: 10
+
+
 
