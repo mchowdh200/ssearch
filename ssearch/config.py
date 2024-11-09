@@ -102,6 +102,7 @@ class Config:
             "TrainerConfig": self.Trainer.__dict__,
             "LoggingConfig": self.Logging.__dict__,
             "InferenceConfig": self.Inference.__dict__,
+            "KNNReferenceConfig": self.KNNReference.__dict__,
         }
 
 

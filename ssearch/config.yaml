@@ -48,6 +48,7 @@ InferenceConfig:
         - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV07.fasta"
     METADATA_PATH: "/scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/query_dataset_0.metadata" 
     DISTANCES_PATH: "/scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/query_results_D.npy"
+    K: 10
 
 
 KNNReferenceConfig:
