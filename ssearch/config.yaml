@@ -1,55 +1,88 @@
 ModelConfig:
-    BASE_MODEL: "InstaDeepAI/nucleotide-transformer-v2-50m-multi-species"
-    # SEQUENCE_LENGTH: 150 # TODO prob dont need since embedding aggregation takes padding into account
+  BASE_MODEL: "InstaDeepAI/nucleotide-transformer-v2-50m-multi-species"
+  # SEQUENCE_LENGTH: 150 # TODO prob dont need since embedding aggregation takes padding into account
 
 TrainingDataConfig:
-    TRAIN_DATA: "/scratch/Shares/layer/projects/sequence_similarity_search/training_data/grch38-gg-silva.txt"
-    VAL_DATA: "/scratch/Shares/layer/projects/sequence_similarity_search/training_data/mpox-subsampled.txt"
+  TRAIN_DATA: "/scratch/Shares/layer/projects/sequence_similarity_search/training_data/grch38-gg-silva.txt"
+  VAL_DATA: "/scratch/Shares/layer/projects/sequence_similarity_search/training_data/mpox-subsampled.txt"
 
 TrainerConfig:
-    DEVICES: 4
-    EPOCHS: 100
-    BATCH_SIZE: 256
-    ACCUMULATE_GRAD_BATCHES: 4
-    NUM_WORKERS: 32
-    LEARNING_RATE: 1.0e-3
-    WEIGHT_DECAY: 0.01
-    SIMILARITY_THRESHOLD: 0.8
+  DEVICES: 4
+  EPOCHS: 100
+  BATCH_SIZE: 256
+  ACCUMULATE_GRAD_BATCHES: 4
+  NUM_WORKERS: 32
+  LEARNING_RATE: 1.0e-3
+  WEIGHT_DECAY: 0.01
+  SIMILARITY_THRESHOLD: 0.8
 
 LoggingConfig:
-    NAME: "nt-ia3"
-    PROJECT: "seq-similarity"
-    PROGRESS_BAR: False
-    CHECKPOINT_DIR: "CHECKPOINTS-IA3"
+  NAME: "nt-ia3"
+  PROJECT: "seq-similarity"
+  PROGRESS_BAR: False
+  CHECKPOINT_DIR: "CHECKPOINTS-IA3"
 
-InferenceConfig:
-    BASE_MODEL: "InstaDeepAI/nucleotide-transformer-v2-50m-multi-species"
-    ADAPTER_CHECKPOINT: "/Users/much8161/Repositories/ssearch/CHECKPOINTS-IA3/epoch=71-val_loss=0.0010/nucleotide-transformer-ia3-ssearch"
-    OUTPUT_DIR: "/cache/much8161-results"
-    BATCH_SIZE: 2048 # per gpu
-    NUM_WORKERS_PER_GPU: 8
-    NUM_GPUS: 4
-    USE_AMP: True
-    METAGENOMIC_INDEX_DATA:
-        # - "/scratch/Shares/layer/projects/sequence_similarity_search/SRR12432009/BetaCoV_bat_Yunnan_RmYN02_2019_1.fq.gz"
-        # - "/scratch/Shares/layer/projects/sequence_similarity_search/SRR12432009/BetaCoV_bat_Yunnan_RmYN02_2019_2.fq.gz"
-        - "/cache/much8161-results/BetaCoV_bat_Yunnan_RmYN02_2019_1.fq.gz"
-        - "/cache/much8161-results/BetaCoV_bat_Yunnan_RmYN02_2019_2.fq.gz"
-    METAGENOMIC_QUERY_DATA:
-        - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/BJ01.fasta"
-        - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV02.fasta"
-        - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV06.fasta"
-        - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/ZC45.fasta"
-        - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/RmYN02.fasta"
-        - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV05.fasta"
-        - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV1.fasta"
-        - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/RaTG13.fasta" 
-        - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV04.fasta"
-        - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV07.fasta"
-    METADATA_PATH: "/scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/query_dataset_0.metadata" 
-    DISTANCES_PATH: "/scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/query_results_D.npy"
-    K: 10
-
+MetagenomicIndexConfig:
+  BASE_MODEL: "InstaDeepAI/nucleotide-transformer-v2-50m-multi-species"
+  ADAPTER_CHECKPOINT: "/Users/much8161/Repositories/ssearch/CHECKPOINTS-IA3/epoch=71-val_loss=0.0010/nucleotide-transformer-ia3-ssearch"
+  OUTPUT_DIR: "/data/murad/ssearch/metagenomics-experiment"
+  BATCH_SIZE: 2048 # per gpu
+  NUM_WORKERS_PER_GPU: 8
+  NUM_GPUS: 4
+  USE_AMP: True
+  METAGENOMIC_INDEX_DATA:
+    - /data/murad/ssearch/bat_samples/SRR14381419/BatCoV_Yunnan_MmYN16_2020_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381419/BatCoV_Yunnan_MmYN16_2020_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381423/BatCoV_Yunnan_RsYN03_RsYN12_2019_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381423/BatCoV_Yunnan_RsYN03_RsYN12_2019_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381424/BatCoV_Yunnan_HcYN26_2020_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381424/BatCoV_Yunnan_HcYN26_2020_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381421/BatCoV_Yunnan_RsYN04_RsYN14_2020_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381421/BatCoV_Yunnan_RsYN04_RsYN14_2020_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381427/BatCoV_Yunnan_RsYN09_2020_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381427/BatCoV_Yunnan_RsYN09_2020_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381420/BatCoV_Yunnan_MlYN15_2020_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381420/BatCoV_Yunnan_MlYN15_2020_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381430/BatCoV_Yunnan_RmYN07_RmYN21_2020_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381430/BatCoV_Yunnan_RmYN07_RmYN21_2020_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381422/BatCoV_Yunnan_HpYN13_2019_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381422/BatCoV_Yunnan_HpYN13_2019_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381417/BatCoV_Yunnan_HlYN18_2020_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381417/BatCoV_Yunnan_HlYN18_2020_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381429/BatCoV_Yunnan_RmYN08_RmYN22_2020_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381429/BatCoV_Yunnan_RmYN08_RmYN22_2020_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381428/BatCoV_Yunnan_HlYN23_2020_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381428/BatCoV_Yunnan_HlYN23_2020_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381418/BatCoV_Yunnan_RmYN05_RmYN17_2020_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381418/BatCoV_Yunnan_RmYN05_RmYN17_2020_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381433/BatCoV_Yunnan_CpYN11_2019_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381433/BatCoV_Yunnan_CpYN11_2019_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381416/BatCoV_Yunnan_RpYN06_2020_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381416/BatCoV_Yunnan_RpYN06_2020_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381434/BatCoV_Yunnan_HlYN10_2019_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381434/BatCoV_Yunnan_HlYN10_2019_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381431/BatCoV_Yunnan_MlYN20_2020_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381431/BatCoV_Yunnan_MlYN20_2020_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381432/BatCoV_Yunnan_McYN19_2020_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381432/BatCoV_Yunnan_McYN19_2020_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381425/BatCoV_Yunnan_RsYN25_2020_2.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381425/BatCoV_Yunnan_RsYN25_2020_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381426/BatCoV_Yunnan_RmYN24_2020_1.fq.gz
+    - /data/murad/ssearch/bat_samples/SRR14381426/BatCoV_Yunnan_RmYN24_2020_2.fq.gz
+  METAGENOMIC_QUERY_DATA:
+    - "/data/murad/ssearch/coronavirus-assemblies/BJ01.fasta"
+    - "/data/murad/ssearch/coronavirus-assemblies/WIV02.fasta"
+    - "/data/murad/ssearch/coronavirus-assemblies/WIV06.fasta"
+    - "/data/murad/ssearch/coronavirus-assemblies/ZC45.fasta"
+    - "/data/murad/ssearch/coronavirus-assemblies/RmYN02.fasta"
+    - "/data/murad/ssearch/coronavirus-assemblies/WIV05.fasta"
+    - "/data/murad/ssearch/coronavirus-assemblies/WIV1.fasta"
+    - "/data/murad/ssearch/coronavirus-assemblies/RaTG13.fasta"
+    - "/data/murad/ssearch/coronavirus-assemblies/WIV04.fasta"
+    - "/data/murad/ssearch/coronavirus-assemblies/WIV07.fasta"
+  METADATA_PATH: "/scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/query_dataset_0.metadata"
+  DISTANCES_PATH: "/scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/query_results_D.npy"
+  K: 10
 
 KNNReferenceConfig:
   BASE_MODEL: "InstaDeepAI/nucleotide-transformer-v2-50m-multi-species"
@@ -67,12 +100,9 @@ KNNReferenceConfig:
     - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/ZC45.fasta"
     - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV05.fasta"
     - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV1.fasta"
-    - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/RaTG13.fasta" 
+    - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/RaTG13.fasta"
     - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV04.fasta"
     - "/scratch/Shares/layer/projects/sequence_similarity_search/viruses/WIV07.fasta"
   WINDOW_SIZE: 150
   STRIDE: 50
   K: 10
-
-
-

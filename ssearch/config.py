@@ -42,8 +42,7 @@ class LoggingConfig:
 
 
 @dataclass(kw_only=True)
-# TODO change name to MetaGenomicIndexConfig
-class InferenceConfig:
+class MetagenomicIndexConfig:
     BASE_MODEL: str
     ADAPTER_CHECKPOINT: str
     OUTPUT_DIR: str
@@ -51,11 +50,18 @@ class InferenceConfig:
     NUM_WORKERS_PER_GPU: int
     NUM_GPUS: int
     USE_AMP: bool
-    METAGENOMIC_INDEX_DATA: list[str]
-    METAGENOMIC_QUERY_DATA: list[str]
+    METAGENOMIC_INDEX_DATA: list[str]  # bat metagenomic samples (fastq)
+    METAGENOMIC_QUERY_DATA: list[str]  # viral genomes (fasta)
     METADATA_PATH: str
     DISTANCES_PATH: str
-    K: int # TODO add this to the metagenomic index args
+    K: int  # TODO add this to the metagenomic index args
+
+    @staticmethod
+    def from_yaml(config_path: str):
+        with open(config_path, "r") as file:
+            config = safe_load(file)
+        return MetagenomicIndexConfig(**config)
+
 
 @dataclass(kw_only=True)
 class KNNReferenceConfig:
@@ -79,7 +85,9 @@ class Config:
     TrainingData: TrainingDataConfig
     Trainer: TrainerConfig
     Logging: LoggingConfig
-    Inference: InferenceConfig # TODO change this to split into task specific configs
+    MetagenomicIndex: (
+        MetagenomicIndexConfig  # TODO change this to split into task specific configs
+    )
     KNNReference: KNNReferenceConfig
 
     @staticmethod
@@ -91,7 +99,7 @@ class Config:
             TrainingData=TrainingDataConfig(**config["TrainingDataConfig"]),
             Trainer=TrainerConfig(**config["TrainerConfig"]),
             Logging=LoggingConfig(**config["LoggingConfig"]),
-            Inference=InferenceConfig(**config["InferenceConfig"]),
+            MetagenomicIndex=MetagenomicIndexConfig(**config["MetagenomicIndexConfig"]),
             KNNReference=KNNReferenceConfig(**config["KNNReferenceConfig"]),
         )
 
@@ -101,7 +109,7 @@ class Config:
             "TrainingDataConfig": self.TrainingData.__dict__,
             "TrainerConfig": self.Trainer.__dict__,
             "LoggingConfig": self.Logging.__dict__,
-            "InferenceConfig": self.Inference.__dict__,
+            "MetagenomicIndexConfig": self.MetagenomicIndex.__dict__,
             "KNNReferenceConfig": self.KNNReference.__dict__,
         }
 
