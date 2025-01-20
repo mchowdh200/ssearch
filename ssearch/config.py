@@ -54,6 +54,8 @@ class MetagenomicIndexConfig:
     METAGENOMIC_QUERY_DATA: list[str]  # viral genomes (fasta)
     METADATA_PATH: str
     DISTANCES_PATH: str
+    WINDOW_SIZE: int
+    STRIDE: int
     K: int  # TODO add this to the metagenomic index args
 
     @staticmethod

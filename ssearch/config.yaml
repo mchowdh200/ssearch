@@ -82,6 +82,8 @@ MetagenomicIndexConfig:
     - "/data/murad/ssearch/coronavirus-assemblies/WIV07.fasta"
   METADATA_PATH: "/scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/query_dataset_0.metadata"
   DISTANCES_PATH: "/scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/query_results_D.npy"
+  WINDOW_SIZE: 150
+  STRIDE: 50
   K: 10
 
 KNNReferenceConfig:
