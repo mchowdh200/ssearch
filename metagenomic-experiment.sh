@@ -11,32 +11,21 @@
 
 set -e
 
-if [ ! -f "/cache/much8161-results/BetaCoV_bat_Yunnan_RmYN02_2019_1.fq.gz" ]; then
-    cp /scratch/Shares/layer/projects/sequence_similarity_search/SRR12432009/BetaCoV_bat_Yunnan_RmYN02_2019_1.fq.gz \
-       /cache/much8161-results/
-    cp /scratch/Shares/layer/projects/sequence_similarity_search/SRR12432009/BetaCoV_bat_Yunnan_RmYN02_2019_1.fq.gz.fxi \
-       /cache/much8161-results/
-    cp /scratch/Shares/layer/projects/sequence_similarity_search/SRR12432009/BetaCoV_bat_Yunnan_RmYN02_2019_2.fq.gz \
-       /cache/much8161-results/
-    cp /scratch/Shares/layer/projects/sequence_similarity_search/SRR12432009/BetaCoV_bat_Yunnan_RmYN02_2019_2.fq.gz.fxi \
-       /cache/much8161-results/
-fi
+# TODO move inference data to /cache/much8161-results
+# TODO after inference, move the results back to /scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/
+
+
+mkdir -p /cache/much8161-results
 
 python ssearch/experiments/metagenomics_index.py build-index
 
-# OUTPUT_DIR: "/cache/much8161-results"
-# rm /cache/much8161-results/BetaCoV_bat_Yunnan_RmYN02_2019_1.fq.gz
-# rm /cache/much8161-results/BetaCoV_bat_Yunnan_RmYN02_2019_2.fq.gz
-# mv /cache/much8161-results /scratch/Shares/layer/projects/sequence_similarity_search/experiments/metagenomic/index
-
-mkdir -p /cache/much8161-results
 # if [ ! -f "/cache/much8161-results/index.faiss" ]; then
 #     cp /scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/index.faiss \
 #        /cache/much8161-results/
 # fi
 
-python ssearch/experiments/metagenomics_index.py search-index
-cp /cache/much8161-results/query_results_I.npy /scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/
-cp /cache/much8161-results/query_results_D.npy /scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/
-cp /cache/much8161-results/query_dataset_0.metadata /scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/
-cp /cache/much8161-results/index.faiss /scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/
+# python ssearch/experiments/metagenomics_index.py search-index
+# cp /cache/much8161-results/query_results_I.npy /scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/
+# cp /cache/much8161-results/query_results_D.npy /scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/
+# cp /cache/much8161-results/query_dataset_0.metadata /scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/
+# cp /cache/much8161-results/index.faiss /scratch/Shares/layer/projects/sequence_similarity_search/metagenomics-experiment/

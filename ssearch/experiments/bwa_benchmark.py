@@ -47,11 +47,11 @@ def run_shell_cmds(cmds: list[str], outputs: list[str], processes: int = 1):
     """
     pool = Pool(processes)
     results = pool.map(partial(subprocess.run, shell=True), cmds)
-    if any([r.returncode != 0 for r in results]):
-        print(f"Failed to run command:\n {cmds}", file=sys.stderr)
-        print(f"Deleting incomplete outputs", file=sys.stderr)
-        delete_incomplete(outputs)
-        raise Exception("Failed to run command")
+    # if any([r.returncode != 0 for r in results]):
+    #     print(f"Failed to run command:\n {cmds}", file=sys.stderr)
+    #     print(f"Deleting incomplete outputs", file=sys.stderr)
+    #     delete_incomplete(outputs)
+    #     raise Exception("Failed to run command")
 
 
 def run_func(func: Callable[..., None], args: dict):

@@ -1,7 +1,9 @@
 import argparse
 import os
+import re
 from functools import partial
 from pathlib import Path
+from typing import Literal
 
 import faiss
 import matplotlib.pyplot as plt
@@ -12,7 +14,7 @@ from scipy.signal import savgol_filter
 from transformers import AutoTokenizer
 
 from ssearch.config import DefaultConfig
-from ssearch.data_utils.datasets import (FastqDataset, LenDataset,
+from ssearch.data_utils.datasets import (FastxDataset, LenDataset,
                                          SlidingWindowFasta)
 from ssearch.inference.build_index import build_index
 from ssearch.inference.query_index import query_index
@@ -24,11 +26,24 @@ def not_implemented(**kwargs):
 
 
 def write_sample_pos(batch: dict, output_path: str | Path):
+    """
+    write sample, start, end positions in bed style
+    """
     samples = batch["sample"]
     positions = batch["pos"]
     with open(output_path, "a") as f:
         for sample, (start, end) in zip(samples, positions):
             f.write(f"{sample}\t{start}\t{end}\n")
+
+
+def write_seqname(batch: dict, output_path: str | Path):
+    """
+    Write fastq/fasta sequence names to file
+    """
+    names = batch["name"]
+    with open(output_path, "a") as f:
+        for name in names:
+            f.write(f"{name}\n")
 
 
 def parse_args():
@@ -43,7 +58,7 @@ def parse_args():
         "--fastqs",
         type=str,
         nargs="+",
-        default=DefaultConfig.Inference.METAGENOMIC_INDEX_DATA,
+        default=DefaultConfig.MetagenomicIndex.METAGENOMIC_INDEX_DATA,
         help="Paths to fastq files to index.",
     )
     build_parser.set_defaults(func=build_metagenomics_index)
@@ -54,7 +69,7 @@ def parse_args():
         "--query-fastas",
         type=str,
         nargs="+",
-        default=DefaultConfig.Inference.METAGENOMIC_QUERY_DATA,
+        default=DefaultConfig.MetagenomicIndex.METAGENOMIC_QUERY_DATA,
         help="Path to fastq file to search against index.",
     )
     search_parser.set_defaults(func=query_metagenomics_index)
@@ -63,13 +78,13 @@ def parse_args():
     plot_parser.add_argument(
         "--metadata-path",
         type=str,
-        default=DefaultConfig.Inference.METADATA_PATH,
+        default=DefaultConfig.MetagenomicIndex.METADATA_PATH,
         help="Path to metadata file.",
     )
     plot_parser.add_argument(
         "--distances-path",
         type=str,
-        default=DefaultConfig.Inference.DISTANCES_PATH,
+        default=DefaultConfig.MetagenomicIndex.DISTANCES_PATH,
         help="Path to distances file.",
     )
     plot_parser.set_defaults(func=plot)
@@ -79,41 +94,41 @@ def parse_args():
         subp.add_argument(
             "--output-dir",
             type=str,
-            default=DefaultConfig.Inference.OUTPUT_DIR,
+            default=DefaultConfig.MetagenomicIndex.OUTPUT_DIR,
         )
         if name != "plot":
             subp.add_argument(
                 "--base-model",
                 type=str,
-                default=DefaultConfig.Inference.BASE_MODEL,
+                default=DefaultConfig.MetagenomicIndex.BASE_MODEL,
                 help="Base huggingface model string.",
             )
             subp.add_argument(
                 "--adapter-checkpoint",
                 type=str,
-                default=DefaultConfig.Inference.ADAPTER_CHECKPOINT,
+                default=DefaultConfig.MetagenomicIndex.ADAPTER_CHECKPOINT,
                 help="Path to fine-tuned adapter model checkpoint.",
             )
             subp.add_argument(
                 "--batch-size",
                 type=int,
-                default=DefaultConfig.Inference.BATCH_SIZE,
+                default=DefaultConfig.MetagenomicIndex.BATCH_SIZE,
                 help="Model batch size for inference.",
             )
             subp.add_argument(
                 "--num-workers-per-gpu",
                 type=int,
-                default=DefaultConfig.Inference.NUM_WORKERS_PER_GPU,
+                default=DefaultConfig.MetagenomicIndex.NUM_WORKERS_PER_GPU,
             )
             subp.add_argument(
                 "--num-gpus",
                 type=int,
-                default=DefaultConfig.Inference.NUM_GPUS,
+                default=DefaultConfig.MetagenomicIndex.NUM_GPUS,
             )
             subp.add_argument(
                 "--use-amp",
                 type=bool,
-                default=DefaultConfig.Inference.USE_AMP,
+                default=DefaultConfig.MetagenomicIndex.USE_AMP,
             )
 
     return parser.parse_args()
@@ -130,8 +145,21 @@ def flat_ip_index(d: int):
     return faiss.IndexFlatIP(d)
 
 
+def infer_file_type(file_path: str) -> Literal["fasta", "fastq"]:
+    """
+    Check if fasta or fastq file based on extension.
+    """
+    fq_re = re.compile(r".*\.(fastq|fq)(\.gz)?$")
+    fa_re = re.compile(r".*\.(fasta|fa)(\.gz)?$")
+    if fq_re.match(file_path):
+        return "fastq"
+    elif fa_re.match(file_path):
+        return "fasta"
+    raise ValueError(f"File type not recognized: {file_path}")
+
+
 def build_metagenomics_index(
-    fastqs: list[str],
+    fastxs: list[str],
     output_dir: str,
     base_model: str,
     adapter_checkpoint: str,
@@ -140,9 +168,13 @@ def build_metagenomics_index(
     num_gpus: int,
     use_amp: bool,
 ):
+    """
+    Build single index for metagenomics data from multiple fastq/fasta files.
+    """
 
     datasets: list[LenDataset] = [
-        FastqDataset(fastq, remake_index=False) for fastq in fastqs
+        FastxDataset(fastx, file_type=infer_file_type(fastx), remake_index=False)
+        for fastx in fastxs
     ]
     tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=True)
 
@@ -159,10 +191,58 @@ def build_metagenomics_index(
         use_amp=use_amp,
         datasets=datasets,
         collate_fn=partial(
-            FastqDataset.basic_collate_fn, tokenizer=tokenizer, upper_case=True
+            FastxDataset.basic_collate_fn, tokenizer=tokenizer, upper_case=True
         ),
-        worker_init_fn=FastqDataset.worker_init_fn,
+        worker_init_fn=FastxDataset.worker_init_fn,
     )
+
+
+def build_distributed_metagenomics_index(
+    fastxs: list[str],
+    output_dir: str,
+    base_model: str,
+    adapter_checkpoint: str,
+    batch_size: int,
+    num_workers_per_gpu: int,
+    num_gpus: int,
+    use_amp: bool,
+):
+    """
+    Instead of putting each fastq/a file in one index, put each in a separate index
+    """
+
+    datasets = [
+        FastxDataset(fastx, file_type=infer_file_type(fastx), remake_index=False)
+        for fastx in fastxs
+    ]
+    tokenizer = AutoTokenizer.from_pretrained(base_model, trust_remote_code=True)
+
+    for dataset in datasets:
+
+        index_dir = Path(output_dir) / Path(dataset.filename).with_suffix(
+            ""  # clear the .fa/.fq and if its there, the .gz
+        ).with_suffix("")
+
+        build_index(
+            model_factory=TransformerEncoder,
+            model_args={"model_version": base_model, "checkpoint": adapter_checkpoint},
+            index_factory=flat_l2_index,
+            index_args={"d": 512},
+            output_dir=output_dir,
+            batch_size_per_gpu=batch_size,
+            output_shape=(512,),
+            num_workers_per_gpu=num_workers_per_gpu,
+            num_gpus=num_gpus,
+            use_amp=use_amp,
+            datasets=[dataset],
+            collate_fn=partial(
+                FastxDataset.basic_collate_fn, tokenizer=tokenizer, upper_case=True
+            ),
+            worker_init_fn=FastxDataset.worker_init_fn,
+            model_input_keys=["input_ids", "attention_mask"],
+            metadata_write_fn=write_seqname,
+        )
+
 
 # TODO make some of this configurable with DefaultConfig
 def query_metagenomics_index(

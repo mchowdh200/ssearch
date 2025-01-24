@@ -17,6 +17,4 @@ set -e
 python ssearch/experiments/knn_reference_small.py build-index
 
 mkdir -p /scratch/Shares/layer/projects/sequence_similarity_search/knn-reference-small
-cp /cache/much8161-results/index.faiss \
-   /scratch/Shares/layer/projects/sequence_similarity_search/knn-reference-small/index.faiss
 

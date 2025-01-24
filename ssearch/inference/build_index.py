@@ -16,7 +16,7 @@ def build_index(
     model_args: dict,
     index_factory: Callable[..., faiss.Index],
     index_args: dict,
-    output_dir: str,
+    output_dir: str | Path,
     batch_size_per_gpu: int,
     output_shape: tuple,
     num_workers_per_gpu: int,

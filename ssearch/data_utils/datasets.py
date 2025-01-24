@@ -1,7 +1,9 @@
 import sys
 from abc import ABC, abstractmethod
+from dataclasses import dataclass
 from os.path import exists
 from pathlib import Path
+from typing import Literal
 
 import pandas as pd
 import pyfastx
@@ -72,19 +74,19 @@ class SiameseDataset(LenDataset):
         }
 
 
-class FastqDataset(LenDataset):
+class FastxDataset(LenDataset):
     """
-    Dataset for loading a fastq file using pyfastx and num_workers > 0.
+    Dataset for loading a fastq/fasta file using pyfastx and num_workers > 0.
     You have to use the provided worker_init_fn to load the pyfastx object in each
     worker during dataloader initialization.
 
     example:
-    dataset = FastqDataset(filename, remake_index=True)
+    dataset = FastxDataset(filename, remake_index=True)
     dataloader = DataLoader(
         dataset,
         num_workers=8,
         batch_size=64,
-        worker_init_fn=FastqDataset.worker_init_fn,
+        worker_init_fn=FastxDataset.worker_init_fn,
         collate_fn=dataset.collate_fn,
     )
     """
@@ -92,15 +94,21 @@ class FastqDataset(LenDataset):
     def __init__(
         self,
         filename: str,
+        file_type: Literal["fasta", "fastq"],
         remake_index=False,
     ):
         self.filename = filename
+        self.file_type = file_type
+
+        # we need this because Fastx does not support random access or len
+        self.fastx_fun = pyfastx.Fasta if file_type == "fasta" else pyfastx.Fastq
+
         if not exists(filename + ".fxi") or remake_index:
             self.make_index()
 
     def make_index(self):
         """build the index before initializing workers."""
-        pyfastx.Fastq(self.filename, build_index=True)
+        self.fastx_fun(self.filename, build_index=True)
 
     @staticmethod
     def tokenize_batch(batch, tokenizer, upper_case):
@@ -111,44 +119,128 @@ class FastqDataset(LenDataset):
         )["input_ids"]
 
     def __len__(self):
-        fastq = pyfastx.Fastq(self.filename)
-        return len(fastq)
+        fastx = self.fastx_fun(self.filename)
+        return len(fastx)
 
     def __getitem__(self, idx):
-        return self.fastq[idx]
+        return self.fastx[idx]
 
     @staticmethod
     def basic_collate_fn(batch, tokenizer, upper_case):
         """
         Collate function that returns tokenized sequences and attention masks
         """
-        input_ids = FastqDataset.tokenize_batch(
+        input_ids = FastxDataset.tokenize_batch(
             [x.seq for x in batch], tokenizer, upper_case
         )
         attention_mask = torch.where(input_ids != tokenizer.pad_token_id, True, False)
         return {
             "input_ids": input_ids,
+            "name": [x.name for x in batch],
             "attention_mask": attention_mask,
         }
-
-    def metadata_collate_fn(self, batch):
-        """
-        Collate function that returns metadata along with the tokenized sequences.
-        """
-        raise NotImplementedError()
-        # return {
-        #     "filename": [self.filename for _ in batch],
-        #     "seq": self.tokenize_batch([x.seq for x in batch], tokenizer),
-        #     "name": [x.name for x in batch],
-        #     "qual": [x.qual for x in batch],
-        # }
 
     @staticmethod
     def worker_init_fn(worker_id):
         worker_info = get_worker_info()
         dataset = worker_info.dataset
-        fastq = pyfastx.Fastq(dataset.filename)
-        dataset.fastq = fastq
+        fastx = dataset.fastx_fun(dataset.filename)
+        dataset.fastx = fastx
+
+
+class SlidingWindowContig(LenDataset):
+    """
+    I was too lazy to generalize the sliding window fasta dataset
+    so here we are...
+    """
+
+    def __init__(
+        self,
+        fasta: str,
+        contig: str,
+        window_size: int,
+        stride: int,
+    ):
+        self.filename = fasta
+        self.contig = contig
+        # self.fasta = pyfastx.Fasta(fasta, build_index=True)
+        # self.sequence = self.fasta[contig]
+        self.window_size = window_size
+        self.stride = stride
+        # self.seq, self.antisense, self.positions = self.sliding_windows()
+        # self.name = self.sequence.name
+
+    @staticmethod
+    def worker_init_fn(worker_id):
+        # I hate doing this...
+        worker_info = get_worker_info()
+        dataset = worker_info.dataset
+        dataset.fasta = pyfastx.Fasta(dataset.filename)
+        dataset.sequence = dataset.fasta[dataset.contig]
+        dataset.seq, dataset.antisense, dataset.positions = dataset.sliding_windows()
+        dataset.name = dataset.sequence.name
+
+    def sliding_windows(self):
+        windows = [
+            self.sequence[i : i + self.window_size]
+            for i in range(0, len(self.sequence) - self.window_size + 1, self.stride)
+        ]
+        positions = [
+            (i, i + self.window_size - 1)
+            for i in range(0, len(self.sequence) - self.window_size + 1, self.stride)
+        ]
+
+        seq = [w.seq.upper() for w in windows]
+        antisense = [w.antisense.upper() for w in windows]
+
+        return seq, antisense, positions
+
+    @staticmethod
+    def tokenize_batch(batch: list[str], tokenizer):
+        return tokenizer.batch_encode_plus(
+            batch,
+            return_tensors="pt",
+            padding="longest",
+        )["input_ids"]
+
+    def __len__(self):
+        return len(self.windows)
+
+    def __getitem__(self, idx):
+        return {
+            "seq": self.seq[idx],
+            "antisense": self.antisense[idx],
+            "pos": self.positions[idx],  # start and end positions
+            "name": self.name,  # it'll be the chrom + other stuff
+        }
+
+    @staticmethod
+    def collate_fn(batch, tokenizer):
+        # NOTE: this essentially doubles the batch size
+        seq = [x["seq"] for x in batch]
+        antisense = [x["antisense"] for x in batch]
+
+        seq_ids = SlidingWindowContig.tokenize_batch(seq, tokenizer)
+        antisense_ids = SlidingWindowContig.tokenize_batch(antisense, tokenizer)
+
+        seq_mask = torch.where(seq_ids != tokenizer.pad_token_id, True, False)
+        antisense_mask = torch.where(
+            antisense_ids != tokenizer.pad_token_id, True, False
+        )
+
+        pos = [x["pos"] for x in batch]
+        name = [x["name"] for x in batch]
+
+        return {
+            "seq": seq,
+            "antisense": antisense,
+            "pos": pos,
+            "seq_ids": seq_ids,
+            "antisense_ids": antisense_ids,
+            "seq_mask": seq_mask,
+            "antisense_mask": antisense_mask,
+            "name": name,
+        }
 
 
 class SlidingWindowFasta(LenDataset):
