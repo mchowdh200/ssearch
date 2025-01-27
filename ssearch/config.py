@@ -2,7 +2,7 @@
 Global constants used throughout the project
 """
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from os.path import abspath, dirname
 from typing import Optional
 
@@ -58,29 +58,42 @@ class MetagenomicIndexConfig:
     STRIDE: int
     K: int  # TODO add this to the metagenomic index args
 
-    @staticmethod
-    def from_yaml(config_path: str):
-        with open(config_path, "r") as file:
-            config = safe_load(file)
-        return MetagenomicIndexConfig(**config)
 
-
+# TODO add a work directory to the config for low latency access to data like fastqs
 @dataclass(kw_only=True)
 class KNNReferenceConfig:
-    BASE_MODEL: str
-    ADAPTER_CHECKPOINT: str
-    OUTPUT_DIR: str
-    BATCH_SIZE: int
-    NUM_WORKERS_PER_GPU: int
-    NUM_GPUS: int
-    USE_AMP: bool
-    REFERENCE_FASTA: str
-    QUERY_FASTAS: list[str]
-    WINDOW_SIZE: int
-    STRIDE: int
-    K: int
+    BASE_MODEL: str = "InstaDeepAI/nucleotide-transformer-v2-50m-multi-species"
+    ADAPTER_CHECKPOINT: str = (
+        "/Users/much8161/Repositories/ssearch/CHECKPOINTS-IA3/epoch=71-val_loss=0.0010/nucleotide-transformer-ia3-ssearch"
+    )
+    EMBEDDING_DIM: int = 512
+    OUTPUT_DIR: str = "/cache/much8161-results"
+    BATCH_SIZE: int = 2048
+    NUM_WORKERS_PER_GPU: int = 8
+    NUM_GPUS: int = 4
+    USE_AMP: bool = True
+    REFERENCE_FASTA: str = (
+        "/scratch/Shares/layer/ref/GRCh38_full_analysis_set_plus_decoy_hla.fa"
+    )
+    # taken from ftp://ftp.sra.ebi.ac.uk/vol1/fastq/SRR622/SRR622457/SRR622457_{1|2}.fastq.gz
+    FASTQ_R1: str = (
+        "/scratch/Shares/layer/projects/ssearch/knn-reference/NA12878/SRR622457_1.fastq.gz"
+    )
+    FASTQ_R2: str = (
+        "/scratch/Shares/layer/projects/ssearch/knn-reference/NA12878/SRR622457_2.fastq.gz"
+    )
+    WINDOW_SIZE: int = 150  # TODO figure out the read length of samples
+    STRIDE: int = 50
+    K: int = 10
+    REFERENCE_CONTIGS: set[str] = field(
+        default_factory=lambda: {str(c) for c in range(1, 23)}
+        | {"X", "Y", "MT"}
+        | {f"chr{c}" for c in range(1, 23)}
+        | {"chrX", "chrY", "chrM"}
+    )
 
 
+# TODO do away with this
 @dataclass(kw_only=True)
 class Config:
     Model: ModelConfig
@@ -90,7 +103,7 @@ class Config:
     MetagenomicIndex: (
         MetagenomicIndexConfig  # TODO change this to split into task specific configs
     )
-    KNNReference: KNNReferenceConfig
+    # KNNReference: KNNReferenceConfig
 
     @staticmethod
     def from_yaml(config_path: str):
@@ -102,7 +115,7 @@ class Config:
             Trainer=TrainerConfig(**config["TrainerConfig"]),
             Logging=LoggingConfig(**config["LoggingConfig"]),
             MetagenomicIndex=MetagenomicIndexConfig(**config["MetagenomicIndexConfig"]),
-            KNNReference=KNNReferenceConfig(**config["KNNReferenceConfig"]),
+            # KNNReference=KNNReferenceConfig(**config["KNNReferenceConfig"]),
         )
 
     def to_dict(self):
@@ -112,7 +125,7 @@ class Config:
             "TrainerConfig": self.Trainer.__dict__,
             "LoggingConfig": self.Logging.__dict__,
             "MetagenomicIndexConfig": self.MetagenomicIndex.__dict__,
-            "KNNReferenceConfig": self.KNNReference.__dict__,
+            # "KNNReferenceConfig": self.KNNReference.__dict__,
         }
 
 

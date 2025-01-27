@@ -150,13 +150,12 @@ class FastxDataset(LenDataset):
 
 class SlidingWindowContig(LenDataset):
     """
-    I was too lazy to generalize the sliding window fasta dataset
-    so here we are...
+    Without using the worker init function this class will not initialize properly.
     """
 
     def __init__(
         self,
-        fasta: str,
+        fasta: Path | str,
         contig: str,
         window_size: int,
         stride: int,
@@ -169,12 +168,18 @@ class SlidingWindowContig(LenDataset):
         self.stride = stride
         # self.seq, self.antisense, self.positions = self.sliding_windows()
         # self.name = self.sequence.name
+        self.fasta = None
+        self.sequence = None
+        self.seq = None
+        self.antisense = None
+        self.positions = None
+        self.name = None
 
     @staticmethod
     def worker_init_fn(worker_id):
         # I hate doing this...
         worker_info = get_worker_info()
-        dataset = worker_info.dataset
+        dataset: SlidingWindowContig = worker_info.dataset  # type: ignore
         dataset.fasta = pyfastx.Fasta(dataset.filename)
         dataset.sequence = dataset.fasta[dataset.contig]
         dataset.seq, dataset.antisense, dataset.positions = dataset.sliding_windows()
