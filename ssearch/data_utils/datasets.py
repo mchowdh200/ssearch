@@ -149,6 +149,8 @@ class FastxDataset(LenDataset):
 
 
 class SlidingWindowContig(LenDataset):
+    # TODO dont do the antisense and sense in the same dataset
+    # have it be an option and just make two datsets.
     """
     Without using the worker init function this class will not initialize properly.
     """
@@ -209,13 +211,22 @@ class SlidingWindowContig(LenDataset):
         )["input_ids"]
 
     def __len__(self):
-        return len(self.windows)
+        # i hate this
+        fasta = pyfastx.Fasta(self.filename)
+        sequence = fasta[self.contig]
+        # because dataset has sense and antisense
+        return 2*len(
+            [
+                sequence[i : i + self.window_size]
+                for i in range(0, len(sequence) - self.window_size + 1, self.stride)
+            ]
+        )
 
     def __getitem__(self, idx):
         return {
-            "seq": self.seq[idx],
-            "antisense": self.antisense[idx],
-            "pos": self.positions[idx],  # start and end positions
+            "seq": self.seq[idx//2], # cuz of the length is 2*len
+            "antisense": self.antisense[idx//2],
+            "pos": self.positions[idx//2],  # start and end positions
             "name": self.name,  # it'll be the chrom + other stuff
         }
 
@@ -236,15 +247,24 @@ class SlidingWindowContig(LenDataset):
         pos = [x["pos"] for x in batch]
         name = [x["name"] for x in batch]
 
+        # return {
+        #     "seq": seq,
+        #     "antisense": antisense,
+        #     "pos": pos,
+        #     "seq_ids": seq_ids,
+        #     "antisense_ids": antisense_ids,
+        #     "seq_mask": seq_mask,
+        #     "antisense_mask": antisense_mask,
+        #     "name": name,
+        # }
+
+        # this bad
         return {
-            "seq": seq,
-            "antisense": antisense,
-            "pos": pos,
-            "seq_ids": seq_ids,
-            "antisense_ids": antisense_ids,
-            "seq_mask": seq_mask,
-            "antisense_mask": antisense_mask,
-            "name": name,
+            "seq": seq + antisense,
+            "pos": pos + pos,
+            "input_ids": torch.cat((seq_ids, antisense_ids)),
+            "attention_mask": torch.cat((seq_mask, antisense_mask)),
+            "name": name + [f"{n}_antisense" for n in name],
         }
 
 

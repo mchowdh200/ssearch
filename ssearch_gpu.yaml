@@ -3,7 +3,9 @@ channels:
   - pytorch
   - nvidia
   - conda-forge
+  - bioconda
 dependencies:
+  - python=3.12
   - transformers == 4.43.2
   - pytorch == 2.4.1
   - pytorch-cuda = 12.1
@@ -12,9 +14,14 @@ dependencies:
   - lightning-utilities == 0.11.7
   - faiss-cpu=1.9.0
   - matplotlib
+  - snakemake=8.14
+  - numpy
+  - bwa
   - pip
   - pip:
     - peft
     - pyfastx
     - intervaltree
     - scipy
+    - snakemake-executor-plugin-slurm
+    - -e . 

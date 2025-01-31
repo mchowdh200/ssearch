@@ -10,7 +10,6 @@ from pathlib import Path
 import faiss
 import matplotlib.pyplot as plt
 import numpy as np
-from torch.nn import Transformer
 from transformers import AutoTokenizer
 
 from ssearch.config import DefaultConfig

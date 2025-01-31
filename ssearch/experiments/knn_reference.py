@@ -15,8 +15,8 @@ from functools import partial
 from pathlib import Path
 
 import faiss
-import matplotlib.pyplot as plt
-import numpy as np
+# import matplotlib.pyplot as plt
+# import numpy as np
 import pyfastx
 from transformers import AutoTokenizer
 
@@ -45,7 +45,7 @@ def write_genomic_positions(batch: dict, output_path: str | Path):
     """
     Write genomic positions for each batch element to metadata file.
     """
-    chroms = batch["name"].split()[0]
+    chroms = [name.split()[0] for name in batch["name"]]
     pos = batch["pos"]
     with open(output_path, "a") as f:
         for chrom, (start, end) in zip(chroms, pos):
@@ -96,8 +96,8 @@ def build_knn_reference_index(
         build_index(
             model_factory=TransformerEncoder,
             model_args={
-                "base_model": base_model,
-                "adapter_checkpoint": adapter_checkpoint,
+                "model_version": base_model,
+                "checkpoint": adapter_checkpoint,
             },
             index_factory=flat_l2_index,
             index_args={"d": embedding_dim},

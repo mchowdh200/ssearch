@@ -1,0 +1,59 @@
+Bootstrap: docker
+From: pytorch/pytorch
+
+%environment
+    . "/miniforge/etc/profile.d/conda.sh"
+    . "/miniforge/etc/profile.d/mamba.sh"
+    conda activate base
+
+%post -c /bin/bash
+    set -e
+
+    apt-get -y update
+    apt-get install -y \
+        wget \
+        build-essential \
+        gcc \
+        make \
+        autoconf \
+        zlib1g-dev \
+        libbz2-dev \
+        libcurl4-openssl-dev \
+        libssl-dev \
+        git \
+        gawk \
+
+    wget https://github.com/conda-forge/miniforge/releases/latest/download/Miniforge3-Linux-x86_64.sh
+    bash Miniforge3-Linux-x86_64.sh -b -p /miniforge
+    rm Miniforge3-Linux-x86_64.sh
+
+    source /miniforge/etc/profile.d/conda.sh
+    source /miniforge/etc/profile.d/mamba.sh
+    conda activate base
+
+    # May not be necessary to install snakemake here.
+    # I may just use the container on individual rules,
+    # but leaving just in case.
+    mamba install -y -c pytorch -c nvidia -c conda-forge -c bioconda \
+        python=3.12 \
+        transformers==4.43.2 \
+        pytorch==2.4.1 \
+        pytorch-cuda=12.1 \
+        pytorch-lightning==2.4.0 \
+        lightning==2.4.0 \
+        lightning-utilities==0.11.7 \
+        faiss-cpu=1.9.0 \
+        matplotlib \
+        snakemake=8 \
+        numpy \
+        bwa \
+        pip
+    pip install peft pyfastx intervaltree scipy snakemake-executor-plugin-slurm
+
+
+
+%runscript
+    # bad idea?
+    exec "$@"
+
+
